@@ -111,6 +111,7 @@ async def main():
         await bot.load_extension("cogs.gambling")
         await bot.load_extension("cogs.social")
         await bot.load_extension("cogs.maintenance")
+        await bot.load_extension("cogs.music")
         try:
             await bot.start(TOKEN)
         finally:

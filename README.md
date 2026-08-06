@@ -43,7 +43,31 @@ Moderation commands can be used by anyone with **Administrator** or the specific
 permission listed. They also respect role hierarchy (you can't kick/ban/mute someone
 above you, the server owner, or yourself).
 
+## Music
+
+Plays YouTube audio (URLs or song-name searches) via `yt-dlp` + FFmpeg — no external
+music servers needed. Commands: `/play`, `/pause`, `/resume`, `/skip`, `/stop`,
+`/queue`, `/nowplaying`, `/volume`, `/shuffle`, `/loop`, `/remove`, `/clear`,
+`/join`, `/leave`.
+
+System dependencies on the host (Debian/Ubuntu):
+
+```bash
+sudo apt install ffmpeg libopus0
+```
+
+Then install the Python extras and restart the bot:
+
+```bash
+pip install -r requirements.txt
+```
+
+The bot auto-joins your voice channel on `/play`, auto-plays the queue, and leaves
+after 5 minutes of inactivity. Grant it **Connect** and **Speak** permissions in
+your voice channels.
+
 ## Bot permissions
 
 When inviting the bot, grant it at least:
-`Send Messages`, `Embed Links`, `Kick Members`, `Ban Members`, `Moderate Members`.
+`Send Messages`, `Embed Links`, `Kick Members`, `Ban Members`, `Moderate Members`,
+`Connect`, `Speak`.
