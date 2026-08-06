@@ -51,8 +51,20 @@ async def on_command_error(ctx: commands.Context, error: commands.CommandError):
             f"Usage: `{ctx.prefix}{ctx.command.qualified_name} {ctx.command.signature}`"
         )
     else:
+        if _is_disk_error(error):
+            print(f"[db] disk/storage error: {error}")
+            await ctx.send("🗄️ The database can't write right now (disk or storage issue). An admin can run `b.dbinfo` and `b.dbprune`.")
+            return
         print(f"Ignoring exception in command {ctx.command}: {error}")
         await ctx.send(f"Something went wrong: {error}")
+
+
+def _is_disk_error(error: Exception) -> bool:
+    import sqlite3
+    if isinstance(error, sqlite3.OperationalError) and "full" in str(error).lower():
+        return True
+    return any(isinstance(err, sqlite3.OperationalError) and "full" in str(err).lower()
+               for err in (getattr(error, "original", None),) if err is not None)
 
 
 @bot.tree.error
@@ -66,6 +78,13 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             "I don't have the required permissions to do that.", ephemeral=True
         )
     else:
+        if _is_disk_error(error):
+            print(f"[db] disk/storage error: {error}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "🗄️ The database can't write right now (disk or storage issue). An admin can run `/dbinfo` and `/dbprune`.", ephemeral=True
+                )
+            return
         print(f"Ignoring exception in slash command {interaction.command}: {error}")
         if not interaction.response.is_done():
             await interaction.response.send_message(
@@ -87,6 +106,7 @@ async def main():
         await bot.load_extension("cogs.claims")
         await bot.load_extension("cogs.gambling")
         await bot.load_extension("cogs.social")
+        await bot.load_extension("cogs.maintenance")
         try:
             await bot.start(TOKEN)
         finally:

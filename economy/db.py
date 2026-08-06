@@ -148,11 +148,56 @@ class Database:
     async def setup(self):
         self.conn = await aiosqlite.connect(self.path)
         self.conn.row_factory = aiosqlite.Row
+        # Keep writes light on small disks: WAL avoids journal bloat, memory temp
+        # avoids temp-file growth, and we checkpoint frequently.
+        await self.conn.execute("PRAGMA journal_mode=WAL")
+        await self.conn.execute("PRAGMA synchronous=NORMAL")
+        await self.conn.execute("PRAGMA wal_autocheckpoint=200")
+        await self.conn.execute("PRAGMA temp_store=MEMORY")
         await self.conn.executescript(SCHEMA)
         await self.conn.execute(
             "INSERT OR IGNORE INTO lottery_meta (id, pool, next_draw) VALUES (1, 0, '1970-01-01 00:00:00')"
         )
         await self.conn.commit()
+        await self.prune()
+
+    async def prune(self):
+        """Keep the database small: trim old transactions and checkpoint the WAL."""
+        try:
+            await self.conn.execute(
+                "DELETE FROM transactions WHERE created_at < datetime('now', '-30 days')"
+            )
+            await self.conn.execute(
+                "DELETE FROM transactions WHERE id NOT IN (SELECT id FROM transactions ORDER BY id DESC LIMIT 5000)"
+            )
+            await self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            await self.conn.commit()
+        except Exception as e:
+            print(f"[db] prune failed (continuing anyway): {e}")
+
+    async def info(self) -> dict:
+        """Small diagnostic about the database file (for the /dbinfo command)."""
+        import os as _os
+        stats = {}
+        for table in ("transactions", "users", "inventory", "stats", "quests",
+                      "achievements", "pets", "farms", "market", "cooldowns",
+                      "lottery_entries", "tools"):
+            try:
+                row = await self.fetchone(f"SELECT COUNT(*) AS c FROM {table}")
+                stats[table] = row["c"] if row else 0
+            except Exception:
+                stats[table] = -1
+        size = 0
+        journal = 0
+        try:
+            if _os.path.exists(self.path):
+                size = _os.path.getsize(self.path)
+            for suffix in ("-wal", "-journal", "-shm"):
+                if _os.path.exists(self.path + suffix):
+                    journal += _os.path.getsize(self.path + suffix)
+        except OSError:
+            pass
+        return {"path": self.path, "size": size, "wal_size": journal, "tables": stats}
 
     async def close(self):
         if self.conn:
