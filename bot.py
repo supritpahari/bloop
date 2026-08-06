@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import discord
@@ -11,7 +12,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "b."
 
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN not set. Copy .env.example to .env and add your bot token.")
+    raise ValueError("DISCORD_TOKEN is not set. Copy .env.example to .env and add your bot token.")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,7 +23,6 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
-    print(f"Prefix: {PREFIX} | Slash commands available via /")
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} slash command(s)")
@@ -30,27 +30,48 @@ async def on_ready():
         print(f"Failed to sync slash commands: {e}")
 
 
-@bot.command(name="ping")
-async def ping(ctx: commands.Context):
-    latency = round(bot.latency * 1000, 2)
-    await ctx.send(f"Pong! {latency}ms")
+@bot.event
+async def on_command_error(ctx: commands.Context, error: commands.CommandError):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("You don't have permission to use this command.")
+    elif isinstance(error, commands.BotMissingPermissions):
+        await ctx.send("I don't have the required permissions to do that.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(
+            f"Missing required argument `{error.param.name}`. "
+            f"Usage: `{ctx.prefix}{ctx.command.qualified_name} {ctx.command.signature}`"
+        )
+    else:
+        print(f"Ignoring exception in command {ctx.command}: {error}")
+        await ctx.send(f"Something went wrong: {error}")
 
 
-@bot.command(name="echo")
-async def echo(ctx: commands.Context, *, message: str):
-    await ctx.send(message)
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "You don't have permission to use this command.", ephemeral=True
+        )
+    elif isinstance(error, app_commands.BotMissingPermissions):
+        await interaction.response.send_message(
+            "I don't have the required permissions to do that.", ephemeral=True
+        )
+    else:
+        print(f"Ignoring exception in slash command {interaction.command}: {error}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                f"Something went wrong: {error}", ephemeral=True
+            )
 
 
-@bot.tree.command(name="ping", description="Check the bot's latency")
-async def slash_ping(interaction: discord.Interaction):
-    latency = round(bot.latency * 1000, 2)
-    await interaction.response.send_message(f"Pong! {latency}ms")
+async def main():
+    async with bot:
+        await bot.load_extension("cogs.moderation")
+        await bot.load_extension("cogs.info")
+        await bot.start(TOKEN)
 
 
-@bot.tree.command(name="echo", description="Repeat a message back")
-@app_commands.describe(message="The message to echo")
-async def slash_echo(interaction: discord.Interaction, message: str):
-    await interaction.response.send_message(message)
-
-
-bot.run(TOKEN)
+if __name__ == "__main__":
+    asyncio.run(main())
