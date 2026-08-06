@@ -7,16 +7,20 @@ class Info(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(name="ping")
+    @commands.command(name="ping", help="Check the bot's latency.", usage="b.ping")
     async def ping(self, ctx: commands.Context):
         latency = round(self.bot.latency * 1000, 2)
         await ctx.send(f"Pong! {latency}ms")
 
-    @commands.command(name="echo")
+    @commands.command(name="echo", help="Repeat a message back to the channel.", usage="b.echo <message>")
     async def echo(self, ctx: commands.Context, *, message: str):
         await ctx.send(message)
 
-    @commands.command(name="avatar")
+    @commands.command(
+        name="avatar",
+        help="Show a user's profile picture as a large card.",
+        usage="b.avatar [@user]",
+    )
     async def avatar(self, ctx: commands.Context, member: discord.Member = None):
         member = member or ctx.author
         embed = discord.Embed(
@@ -28,7 +32,11 @@ class Info(commands.Cog):
         embed.add_field(name="Open original", value=f"[Click here]({member.display_avatar.url})")
         await ctx.send(embed=embed)
 
-    @commands.command(name="userinfo")
+    @commands.command(
+        name="userinfo",
+        help="Show details about a user: ID, account creation, join date, roles and status.",
+        usage="b.userinfo [@user]",
+    )
     async def userinfo(self, ctx: commands.Context, member: discord.Member = None):
         member = member or ctx.author
         embed = discord.Embed(title=member.display_name, color=member.color)

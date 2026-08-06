@@ -17,7 +17,7 @@ if not TOKEN:
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 
 
 @bot.event
@@ -70,6 +70,7 @@ async def main():
     async with bot:
         await bot.load_extension("cogs.moderation")
         await bot.load_extension("cogs.info")
+        await bot.load_extension("cogs.help")
         await bot.start(TOKEN)
 
 

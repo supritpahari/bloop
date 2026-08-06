@@ -34,7 +34,11 @@ class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(name="kick")
+    @commands.command(
+        name="kick",
+        help="Kick a member from the server. Requires the Kick Members permission.",
+        usage="b.kick <@user> [reason]",
+    )
     @commands.has_permissions(kick_members=True)
     @commands.bot_has_permissions(kick_members=True)
     async def kick(self, ctx: commands.Context, member: discord.Member, *, reason: str = None):
@@ -49,7 +53,11 @@ class Moderation(commands.Cog):
             return
         await ctx.send(f"Kicked {member.mention}.")
 
-    @commands.command(name="ban")
+    @commands.command(
+        name="ban",
+        help="Ban a member from the server. Requires the Ban Members permission.",
+        usage="b.ban <@user> [reason]",
+    )
     @commands.has_permissions(ban_members=True)
     @commands.bot_has_permissions(ban_members=True)
     async def ban(self, ctx: commands.Context, member: discord.Member, *, reason: str = None):
@@ -64,7 +72,11 @@ class Moderation(commands.Cog):
             return
         await ctx.send(f"Banned {member.mention}.")
 
-    @commands.command(name="mute")
+    @commands.command(
+        name="mute",
+        help="Timeout a member for a duration such as 10m, 2h, 1d or 1h 30m. Requires the Moderate Members permission.",
+        usage="b.mute <@user> <duration> [reason]",
+    )
     @commands.has_permissions(moderate_members=True)
     @commands.bot_has_permissions(moderate_members=True)
     async def mute(self, ctx: commands.Context, member: discord.Member, duration: str, *, reason: str = None):
@@ -84,7 +96,11 @@ class Moderation(commands.Cog):
             return
         await ctx.send(f"Muted {member.mention} for {duration}.")
 
-    @commands.command(name="unmute")
+    @commands.command(
+        name="unmute",
+        help="Remove a timeout from a member. Requires the Moderate Members permission.",
+        usage="b.unmute <@user>",
+    )
     @commands.has_permissions(moderate_members=True)
     @commands.bot_has_permissions(moderate_members=True)
     async def unmute(self, ctx: commands.Context, member: discord.Member):

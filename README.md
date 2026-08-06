@@ -29,6 +29,7 @@ python bot.py
 
 | Prefix (`b.`) | Slash (`/`) | What it does                    | Required permission |
 | -------------- | ----------- | ------------------------------- | ------------------- |
+| `b.help [command]` | `/help` | Shows all commands, or details for one | Anyone             |
 | `b.ping`       | `/ping`     | Bot latency in ms               | Anyone              |
 | `b.echo ...`   | `/echo`     | Repeats your message            | Anyone              |
 | `b.avatar [@user]` | `/avatar`  | Shows a big profile picture     | Anyone              |
