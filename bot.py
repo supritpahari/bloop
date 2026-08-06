@@ -96,6 +96,10 @@ async def main():
     db = Database()
     await db.setup()
     bot.db = db
+    disk = await db.disk_usage()
+    info = await db.info()
+    print(f"[db] {info['path']}")
+    print(f"[db] size: {info['size'] / 1024 / 1024:.2f} MB | disk free: {disk['free'] / 1024 / 1024 / 1024:.1f} GB")
     async with bot:
         await bot.load_extension("cogs.moderation")
         await bot.load_extension("cogs.info")

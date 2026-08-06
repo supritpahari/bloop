@@ -14,10 +14,16 @@ class Maintenance(commands.Cog):
 
     async def _dbinfo(self, ctx):
         info = await self.db.info()
+        disk = await self.db.disk_usage()
         embed = discord.Embed(title="🗄️ Database health", color=config.BASE_COLOR)
         embed.add_field(name="File", value=f"`{info['path']}`", inline=False)
         embed.add_field(name="Database size", value=f"**{info['size'] / 1024 / 1024:.2f} MB**", inline=True)
         embed.add_field(name="WAL/journal size", value=f"**{info['wal_size'] / 1024 / 1024:.2f} MB**", inline=True)
+        embed.add_field(
+            name="Disk (DB filesystem)",
+            value=f"**{disk['free'] / 1024 / 1024 / 1024:.1f} GB free** of {disk['total'] / 1024 / 1024 / 1024:.1f} GB ({disk['percent']}% used)",
+            inline=True,
+        )
         biggest = sorted(info["tables"].items(), key=lambda kv: kv[1], reverse=True)[:5]
         embed.add_field(
             name="Largest tables",

@@ -148,21 +148,29 @@ class Database:
     async def setup(self):
         self.conn = await aiosqlite.connect(self.path)
         self.conn.row_factory = aiosqlite.Row
-        # Keep writes light on small disks: WAL avoids journal bloat, memory temp
-        # avoids temp-file growth, and we checkpoint frequently.
-        await self.conn.execute("PRAGMA journal_mode=WAL")
+        # DELETE journal mode (rollback journal) is far more forgiving on
+        # constrained/sandboxed disks: it reuses pages inside the main DB file
+        # and never grows a separate -wal file. WAL mode can fail with
+        # "database or disk is full" on quota'd storage even when reads work.
+        await self.conn.execute("PRAGMA journal_mode=DELETE")
         await self.conn.execute("PRAGMA synchronous=NORMAL")
-        await self.conn.execute("PRAGMA wal_autocheckpoint=200")
         await self.conn.execute("PRAGMA temp_store=MEMORY")
         await self.conn.executescript(SCHEMA)
         await self.conn.execute(
             "INSERT OR IGNORE INTO lottery_meta (id, pool, next_draw) VALUES (1, 0, '1970-01-01 00:00:00')"
         )
         await self.conn.commit()
+        # If a stale WAL from an older version of this code exists, fold it in
+        # and remove it so it can't keep consuming disk space.
+        try:
+            await self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            await self.conn.commit()
+        except Exception:
+            pass
         await self.prune()
 
     async def prune(self):
-        """Keep the database small: trim old transactions and checkpoint the WAL."""
+        """Keep the database small: trim old transactions and reuse freed pages."""
         try:
             await self.conn.execute(
                 "DELETE FROM transactions WHERE created_at < datetime('now', '-30 days')"
@@ -170,10 +178,32 @@ class Database:
             await self.conn.execute(
                 "DELETE FROM transactions WHERE id NOT IN (SELECT id FROM transactions ORDER BY id DESC LIMIT 5000)"
             )
-            await self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             await self.conn.commit()
+            # If the journal was aborted mid-write it stays on disk; delete it safely.
+            import os as _os
+            for suffix in ("-journal", "-wal"):
+                path = self.path + suffix
+                try:
+                    if _os.path.exists(path) and _os.path.getsize(path) > 0:
+                        _os.remove(path)
+                except OSError:
+                    pass
         except Exception as e:
             print(f"[db] prune failed (continuing anyway): {e}")
+
+    async def disk_usage(self) -> dict:
+        """Free/used space of the filesystem holding the DB (for /dbinfo)."""
+        import shutil
+        try:
+            usage = shutil.disk_usage(self.path)
+            return {
+                "free": usage.free,
+                "total": usage.total,
+                "used": usage.used,
+                "percent": round(usage.used / usage.total * 100, 1),
+            }
+        except OSError:
+            return {"free": 0, "total": 0, "used": 0, "percent": 0}
 
     async def info(self) -> dict:
         """Small diagnostic about the database file (for the /dbinfo command)."""
