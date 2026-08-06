@@ -6,6 +6,10 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from economy import config
+from economy.db import Database
+from economy.db import init_crop_grow
+
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -18,6 +22,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
+bot.db = None
+
+init_crop_grow(config.CROPS)
 
 
 @bot.event
@@ -67,11 +74,23 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
 
 async def main():
+    db = Database()
+    await db.setup()
+    bot.db = db
     async with bot:
         await bot.load_extension("cogs.moderation")
         await bot.load_extension("cogs.info")
         await bot.load_extension("cogs.help")
-        await bot.start(TOKEN)
+        await bot.load_extension("cogs.wallet")
+        await bot.load_extension("cogs.profile")
+        await bot.load_extension("cogs.money")
+        await bot.load_extension("cogs.claims")
+        await bot.load_extension("cogs.gambling")
+        await bot.load_extension("cogs.social")
+        try:
+            await bot.start(TOKEN)
+        finally:
+            await db.close()
 
 
 if __name__ == "__main__":
