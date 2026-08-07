@@ -112,6 +112,7 @@ async def main():
         await bot.load_extension("cogs.social")
         await bot.load_extension("cogs.maintenance")
         await bot.load_extension("cogs.music")
+        await bot.load_extension("cogs.meme")
         try:
             await bot.start(TOKEN)
         finally:
