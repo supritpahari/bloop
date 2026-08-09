@@ -133,7 +133,11 @@ CREATE TABLE IF NOT EXISTS boosts (
     expires_at TEXT NOT NULL,
     PRIMARY KEY (user_id, boost_key)
 );
-"""
+
+CREATE TABLE IF NOT EXISTS ai_moderation (
+    guild_id INTEGER PRIMARY KEY,
+    config TEXT NOT NULL
+);"""
 
 
 class InsufficientFunds(Exception):
