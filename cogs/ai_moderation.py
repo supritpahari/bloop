@@ -441,11 +441,19 @@ class AIModeration(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Scan messages for moderation violations."""
-        # Ignore bots, DMs, and server owners
+        # Ignore bots, DMs
         if message.author.bot or not message.guild:
             return
+
+        # Skip server owner (can't moderate owner)
         if message.author.id == message.guild.owner_id:
             return
+
+        # Skip moderators/admins with moderation permissions
+        if isinstance(message.author, discord.Member):
+            perms = message.author.guild_permissions
+            if perms.administrator or perms.manage_messages or perms.moderate_members:
+                return
 
         # Check if AI moderation is enabled for this guild
         config = GUILD_AI_CONFIG.get(message.guild.id)
