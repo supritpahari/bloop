@@ -139,6 +139,7 @@ async def main():
         await bot.load_extension("cogs.music")
         await bot.load_extension("cogs.meme")
         await bot.load_extension("cogs.ai_moderation")
+        await bot.load_extension("cogs.ai_chat")
         try:
             await bot.start(TOKEN)
         except asyncio.CancelledError:

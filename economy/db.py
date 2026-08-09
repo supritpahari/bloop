@@ -137,6 +137,11 @@ CREATE TABLE IF NOT EXISTS boosts (
 CREATE TABLE IF NOT EXISTS ai_moderation (
     guild_id INTEGER PRIMARY KEY,
     config TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_chat (
+    guild_id INTEGER PRIMARY KEY,
+    config TEXT NOT NULL
 );"""
 
 
