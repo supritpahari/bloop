@@ -131,11 +131,16 @@ class AIChatService:
                     raise ValueError("Invalid API key")
                 if resp.status == 403:
                     raise ValueError("API key doesn't have permission to list models")
+                text = await resp.text()
                 if resp.status != 200:
-                    text = await resp.text()
                     raise ValueError(f"API error ({resp.status}): {text}")
 
-                data = await resp.json()
+                # Handle non-JSON responses (e.g., text/plain)
+                try:
+                    data = json.loads(text)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Invalid JSON response: {text[:200]}")
+
                 models = []
 
                 if provider == "Gemini":
