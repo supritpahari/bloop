@@ -31,23 +31,35 @@ def user_id_of(ctx) -> int:
 
 
 async def reply(ctx, *, content: str = None, embed: discord.Embed = None, view=None, ephemeral: bool = False):
+    if ctx is None:
+        return
     if isinstance(ctx, commands.Context):
         await ctx.send(content=content, embed=embed, view=view)
     else:
-        if not ctx.response.is_done():
-            await ctx.response.send_message(content=content, embed=embed, view=view, ephemeral=ephemeral)
-        else:
-            await ctx.followup.send(content=content, embed=embed, view=view, ephemeral=ephemeral)
+        # Handle discord.Interaction and compat
+        try:
+            if not ctx.response.is_done():
+                await ctx.response.send_message(content=content, embed=embed, view=view, ephemeral=ephemeral)
+            else:
+                await ctx.followup.send(content=content, embed=embed, view=view, ephemeral=ephemeral)
+        except AttributeError:
+            # Fallback for edge cases where response attr is missing
+            pass
 
 
 async def update_message(ctx, *, content: str = None, embed: discord.Embed = None, view=None):
+    if ctx is None:
+        return
     if isinstance(ctx, commands.Context):
         await ctx.send(content=content, embed=embed, view=view)
     else:
-        if ctx.response.is_done():
-            await ctx.edit_original_response(content=content, embed=embed, view=view)
-        else:
-            await ctx.response.send_message(content=content, embed=embed, view=view)
+        try:
+            if ctx.response.is_done():
+                await ctx.edit_original_response(content=content, embed=embed, view=view)
+            else:
+                await ctx.response.send_message(content=content, embed=embed, view=view)
+        except AttributeError:
+            pass
 
 
 # ------------------------------------------------------------------ formatting
