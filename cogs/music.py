@@ -379,11 +379,11 @@ class GuildPlayer:
             return self._elapsed
         return self._elapsed + (time.monotonic() - self._started_at)
 
-    async def _notify(self, embed: Optional[discord.Embed] = None, content: str = None):
+    async def _notify(self, embed: Optional[discord.Embed] = None, content: str = None, view: Optional[discord.ui.View] = None):
         if self.text_channel is None:
             return
         try:
-            await self.text_channel.send(content=content, embed=embed)
+            await self.text_channel.send(content=content, embed=embed, view=view)
         except discord.HTTPException:
             pass
 
