@@ -49,6 +49,10 @@ class AIChatService:
             "auth_prefix": "Bearer ",
             "model_id_field": "id",
             "model_name_field": "name",
+            "fallback_models": [
+                {"id": "opencode-coder", "name": "OpenCode Coder"},
+                {"id": "opencode-chat", "name": "OpenCode Chat"},
+            ]
         },
         "OpenAI": {
             "base_url": "https://api.openai.com/v1",
@@ -67,6 +71,13 @@ class AIChatService:
             "auth_prefix": "",
             "model_id_field": "id",
             "model_name_field": "display_name",
+            "fallback_models": [
+                {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"},
+                {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku"},
+                {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus"},
+                {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet"},
+                {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku"},
+            ]
         },
         "DeepSeek": {
             "base_url": "https://api.deepseek.com/v1",
@@ -76,6 +87,10 @@ class AIChatService:
             "auth_prefix": "Bearer ",
             "model_id_field": "id",
             "model_name_field": "id",
+            "fallback_models": [
+                {"id": "deepseek-chat", "name": "DeepSeek Chat (V3)"},
+                {"id": "deepseek-reasoner", "name": "DeepSeek Reasoner (R1)"},
+            ]
         },
         "xAI": {
             "base_url": "https://api.x.ai/v1",
@@ -85,6 +100,11 @@ class AIChatService:
             "auth_prefix": "Bearer ",
             "model_id_field": "id",
             "model_name_field": "id",
+            "fallback_models": [
+                {"id": "grok-beta", "name": "Grok Beta"},
+                {"id": "grok-2", "name": "Grok 2"},
+                {"id": "grok-2-mini", "name": "Grok 2 Mini"},
+            ]
         },
     }
 
@@ -133,12 +153,20 @@ class AIChatService:
                     raise ValueError("API key doesn't have permission to list models")
                 text = await resp.text()
                 if resp.status != 200:
+                    # Try fallback models for known providers
+                    if "fallback_models" in config and resp.status == 404:
+                        logger.warning(f"Models endpoint 404 for {provider}, using fallback models")
+                        return self._get_fallback_models(config, provider)
                     raise ValueError(f"API error ({resp.status}): {text}")
 
                 # Handle non-JSON responses (e.g., text/plain)
                 try:
                     data = json.loads(text)
                 except json.JSONDecodeError:
+                    # Try fallback models
+                    if "fallback_models" in config:
+                        logger.warning(f"Invalid JSON from {provider}, using fallback models")
+                        return self._get_fallback_models(config, provider)
                     raise ValueError(f"Invalid JSON response: {text[:200]}")
 
                 models = []
@@ -174,10 +202,30 @@ class AIChatService:
 
         except aiohttp.ClientError as e:
             logger.error(f"Network error fetching models from {provider}: {e}")
+            # Try fallback models on network error
+            if "fallback_models" in config:
+                logger.warning(f"Network error for {provider}, using fallback models")
+                return self._get_fallback_models(config, provider)
             raise ValueError(f"Network error: {e}")
         except Exception as e:
             logger.error(f"Error fetching models from {provider}: {e}")
+            # Try fallback models on any error
+            if "fallback_models" in config:
+                logger.warning(f"Error for {provider}, using fallback models")
+                return self._get_fallback_models(config, provider)
             raise
+
+    def _get_fallback_models(self, config: dict, provider: str) -> List[AIModel]:
+        """Return fallback models for providers without working models endpoint."""
+        models = []
+        for fm in config.get("fallback_models", []):
+            models.append(AIModel(
+                id=fm["id"],
+                name=fm["name"],
+                provider=provider
+            ))
+        logger.info(f"Using {len(models)} fallback models for {provider}")
+        return models
 
     async def generate_response(
         self,
