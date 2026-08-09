@@ -1,5 +1,7 @@
 import asyncio
 import os
+import signal
+import sys
 
 import discord
 from discord import app_commands
@@ -92,6 +94,19 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             )
 
 
+async def shutdown(signal_name: str):
+    """Graceful shutdown handler."""
+    print(f"Received {signal_name}, shutting down gracefully...")
+    if bot.db:
+        await bot.db.close()
+    await bot.close()
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    asyncio.get_event_loop().stop()
+
+
 async def main():
     db = Database()
     await db.setup()
@@ -100,6 +115,16 @@ async def main():
     info = await db.info()
     print(f"[db] {info['path']}")
     print(f"[db] size: {info['size'] / 1024 / 1024:.2f} MB | disk free: {disk['free'] / 1024 / 1024 / 1024:.1f} GB")
+
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(s.name)))
+        except NotImplementedError:
+            # Windows doesn't support add_signal_handler
+            pass
+
     async with bot:
         await bot.load_extension("cogs.moderation")
         await bot.load_extension("cogs.info")
@@ -115,9 +140,18 @@ async def main():
         await bot.load_extension("cogs.meme")
         try:
             await bot.start(TOKEN)
+        except asyncio.CancelledError:
+            print("Bot startup cancelled")
+        except KeyboardInterrupt:
+            print("Bot interrupted")
         finally:
-            await db.close()
+            if bot.db:
+                await bot.db.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nShutdown complete")
+        sys.exit(0)
