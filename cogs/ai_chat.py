@@ -436,11 +436,19 @@ class AIChat(commands.Cog):
         config = GUILD_AI_CHAT_CONFIG.get(message.guild.id)
         if not config:
             config = await self._load_config(message.guild.id)
-        if not config or not config.get("enabled"):
+        if not config:
+            logger.info(f"[aichat] guild {message.guild.id}: no config, ignoring message in #{message.channel.name}")
+            return
+        if not config.get("enabled"):
+            logger.info(f"[aichat] guild {message.guild.id}: config exists but disabled, ignoring")
             return
 
         # Only respond in the designated channel
         if message.channel.id != config.get("channel_id"):
+            logger.info(
+                f"[aichat] guild {message.guild.id}: message in #{message.channel.id} "
+                f"but configured channel is {config.get('channel_id')}, ignoring"
+            )
             return
 
         # Don't reply to the bot itself
