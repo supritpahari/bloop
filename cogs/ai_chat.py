@@ -22,7 +22,7 @@ class ProviderSelect(Select):
     """Dropdown for selecting AI platform."""
 
     PROVIDERS = [
-        "OpenRouter", "Gemini", "OpenCode",
+        "OpenRouter", "Gemini",
         "OpenAI", "Anthropic", "DeepSeek", "xAI"
     ]
 
@@ -182,7 +182,8 @@ class AIChatConfigView(View):
         self.channel_id = existing_config.get("channel_id") if existing_config else None
         self.tone = existing_config.get("tone", "casual") if existing_config else "casual"
         self.custom_tone = existing_config.get("custom_tone") if existing_config else None
-        self.enabled = existing_config.get("enabled", False) if existing_config else False
+        # Default new setups to enabled so saving a fresh config actually turns it on.
+        self.enabled = existing_config.get("enabled", True) if existing_config else True
         self.api_key = existing_config.get("api_key") if existing_config else None
         self._models = []
 
@@ -473,7 +474,12 @@ class AIChat(commands.Cog):
 
         except Exception as e:
             logger.error(f"AI chat error: {e}")
-            # Silently fail to not spam the channel
+            try:
+                await message.channel.send(
+                    f"⚠️ AI chat failed: `{type(e).__name__}: {str(e)[:300]}`"
+                )
+            except Exception:
+                pass
 
     async def cog_unload(self):
         await self.service.close()

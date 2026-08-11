@@ -44,20 +44,6 @@ class AIModerationService:
             "moderation_endpoint": "/models/{model}:generateContent",
             "supports_moderation_api": False,
         },
-        "OpenCode": {
-            "base_url": "https://api.opencode.ai/v1",
-            "models_endpoint": "/models",
-            "auth_header": "Authorization",
-            "auth_prefix": "Bearer ",
-            "model_id_field": "id",
-            "model_name_field": "name",
-            "moderation_endpoint": "/chat/completions",
-            "supports_moderation_api": False,
-            "fallback_models": [
-                {"id": "opencode-coder", "name": "OpenCode Coder"},
-                {"id": "opencode-chat", "name": "OpenCode Chat"},
-            ]
-        },
         "OpenAI": {
             "base_url": "https://api.openai.com/v1",
             "models_endpoint": "/models",
@@ -250,7 +236,7 @@ class AIModerationService:
             elif provider == "Gemini":
                 return await self._moderate_gemini(model_id, api_key, message_content, moderation_level, guild_context)
             else:
-                # Use generic OpenAI-compatible chat completions for OpenRouter, DeepSeek, xAI, OpenCode
+                # Use generic OpenAI-compatible chat completions for OpenRouter, DeepSeek, xAI
                 return await self._moderate_chat_completion(provider, model_id, api_key, message_content, moderation_level, guild_context)
         except Exception as e:
             logger.error(f"Moderation error for {provider}/{model_id}: {e}")
@@ -365,7 +351,7 @@ class AIModerationService:
             return self._parse_llm_response(response_text, moderation_level)
 
     async def _moderate_chat_completion(self, provider: str, model_id: str, api_key: str, message_content: str, moderation_level: str, guild_context: str) -> dict:
-        """Use OpenAI-compatible chat completions for OpenRouter, DeepSeek, xAI, OpenCode."""
+        """Use OpenAI-compatible chat completions for OpenRouter, DeepSeek, xAI."""
         config = self.PROVIDERS[provider]
         session = await self._get_session()
         url = f"{config['base_url']}{config['moderation_endpoint']}"

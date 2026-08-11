@@ -27,7 +27,7 @@ class PlatformSelect(Select):
     """Dropdown for selecting AI platform."""
 
     PLATFORMS = [
-        "OpenRouter", "Gemini", "OpenCode",
+        "OpenRouter", "Gemini",
         "OpenAI", "Anthropic", "DeepSeek", "xAI"
     ]
 

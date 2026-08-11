@@ -41,19 +41,6 @@ class AIChatService:
             "model_name_field": "displayName",
             "filter": lambda m: "generateContent" in m.get("supportedGenerationMethods", []),
         },
-        "OpenCode": {
-            "base_url": "https://api.opencode.ai/v1",
-            "models_endpoint": "/models",
-            "chat_endpoint": "/chat/completions",
-            "auth_header": "Authorization",
-            "auth_prefix": "Bearer ",
-            "model_id_field": "id",
-            "model_name_field": "name",
-            "fallback_models": [
-                {"id": "opencode-coder", "name": "OpenCode Coder"},
-                {"id": "opencode-chat", "name": "OpenCode Chat"},
-            ]
-        },
         "OpenAI": {
             "base_url": "https://api.openai.com/v1",
             "models_endpoint": "/models",
@@ -238,7 +225,7 @@ class AIChatService:
     ) -> str:
         """Generate a chat response using the specified AI model."""
         try:
-            if provider == "OpenAI" or provider in ["OpenRouter", "DeepSeek", "xAI", "OpenCode"]:
+            if provider == "OpenAI" or provider in ["OpenRouter", "DeepSeek", "xAI"]:
                 return await self._chat_openai_compatible(provider, model_id, api_key, user_message, system_prompt, conversation_history)
             elif provider == "Anthropic":
                 return await self._chat_anthropic(model_id, api_key, user_message, system_prompt, conversation_history)
