@@ -29,7 +29,7 @@ python bot.py
 
 | Prefix (`b.`) | Slash (`/`) | What it does                    | Required permission |
 | -------------- | ----------- | ------------------------------- | ------------------- |
-| `b.help [command]` | `/help` | Shows all commands, or details for one | Anyone             |
+| `b.help [command]` | `/help` | Browse all commands by category, or get details for one | Anyone |
 | `b.ping`       | `/ping`     | Bot latency in ms               | Anyone              |
 | `b.echo ...`   | `/echo`     | Repeats your message            | Anyone              |
 | `b.avatar [@user]` | `/avatar`  | Shows a big profile picture     | Anyone              |
@@ -53,7 +53,7 @@ and with the `b.` prefix.
 | ------- | ------------ |
 | `/play <query>` | Play a URL, search a name, or queue a whole playlist |
 | `/playnext <query>` | Queue a track (or playlist) at the front of the queue |
-| `/search <query>` | Search YouTube and pick from the top results |
+| `/find <query>` | Search YouTube and pick from the top results |
 | `/pause` / `/resume` | Pause / resume the current track |
 | `/skip` | Skip the current track |
 | `/previous` | Go back to the previous track |

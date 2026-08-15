@@ -7,7 +7,7 @@ on the host, plus the `yt-dlp` and `PyNaCl` pip packages.
 Highlights:
 - URL, search, or playlist playback (playlists queue lazily so adds are fast)
 - Interactive player panel + paginated queue with per-track remove buttons
-- /search with a dropdown picker, /playnext, /previous, /seek, /jump, /move
+- /find with a dropdown picker, /playnext, /previous, /seek, /jump, /move
 - Auto-updating now-playing progress bar, auto-leave on idle or empty channel
 """
 
@@ -34,7 +34,7 @@ MAX_QUEUE_LIST = 10          # tracks shown per /queue page (and in embeds)
 MAX_QUEUE_SIZE = 500         # hard cap on queued tracks
 PLAYLIST_LIMIT = 50          # max tracks pulled from a playlist URL
 HISTORY_LIMIT = 20           # how many previous tracks are remembered
-SEARCH_LIMIT = 5             # results shown by /search
+SEARCH_LIMIT = 5             # results shown by /find
 PROGRESS_UPDATE_INTERVAL = 5.0  # seconds between progress bar updates
 
 YTDL_OPTIONS = {
@@ -865,7 +865,7 @@ class Music(commands.Cog):
     **Commands:**
     • `/play <query>` — Play a URL, search a name, or queue a whole playlist
     • `/playnext <query>` — Queue a track (or playlist) at the front of the queue
-    • `/search <query>` — Search YouTube and pick from the top results
+    • `/find <query>` — Search YouTube and pick from the top results
     • `/pause` / `/resume` — Pause and resume the current track
     • `/skip` — Skip the current track
     • `/previous` — Go back to the previous track
@@ -1191,15 +1191,15 @@ class Music(commands.Cog):
     async def slash_playnext(self, interaction: discord.Interaction, query: str):
         await self._safe(interaction, lambda: self._playnext(interaction, query))
 
-    # ------------------------------------------------------------- search
+    # --------------------------------------------------------------- find
 
-    @commands.command(name="search", aliases=["find"], help="Search YouTube and pick from the top results.", usage="b.search <song name>")
-    async def search(self, ctx: commands.Context, *, query: str):
+    @commands.command(name="find", aliases=["song"], help="Search YouTube for a song and pick from the top results.", usage="b.find <song name>")
+    async def find(self, ctx: commands.Context, *, query: str):
         await self._safe(ctx, lambda: self._search(ctx, query))
 
-    @app_commands.command(name="search", description="Search YouTube and pick from the top results.")
+    @app_commands.command(name="find", description="Search YouTube for a song and pick from the top results.")
     @app_commands.describe(query="What to search for")
-    async def slash_search(self, interaction: discord.Interaction, query: str):
+    async def slash_find(self, interaction: discord.Interaction, query: str):
         await self._safe(interaction, lambda: self._search(interaction, query))
 
     # ------------------------------------------------------------ pause
