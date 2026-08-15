@@ -110,6 +110,8 @@ async def shutdown(signal_name: str):
     print(f"Received {signal_name}, shutting down gracefully...")
     if bot.db:
         await bot.db.close()
+    if hasattr(bot, "xp_db") and bot.xp_db:
+        await bot.xp_db.close()
     await bot.close()
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
@@ -122,6 +124,9 @@ async def main():
     db = Database()
     await db.setup()
     bot.db = db
+    from economy.xp_db import XPDB
+    bot.xp_db = XPDB()
+    await bot.xp_db.setup()
     disk = await db.disk_usage()
     info = await db.info()
     print(f"[db] {info['path']}")
@@ -148,9 +153,12 @@ async def main():
         await bot.load_extension("cogs.social")
         await bot.load_extension("cogs.maintenance")
         await bot.load_extension("cogs.music")
+        await bot.load_extension("cogs.joke")
         await bot.load_extension("cogs.meme")
         await bot.load_extension("cogs.ai_moderation")
         await bot.load_extension("cogs.ai_chat")
+        await bot.load_extension("cogs.xp_level")
+        await bot.load_extension("cogs.welcome_leave")
         try:
             await bot.start(TOKEN)
         except asyncio.CancelledError:
