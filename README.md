@@ -45,10 +45,34 @@ above you, the server owner, or yourself).
 
 ## Music
 
-Plays YouTube audio (URLs or song-name searches) via `yt-dlp` + FFmpeg — no external
-music servers needed. Commands: `/play`, `/pause`, `/resume`, `/skip`, `/stop`,
-`/queue`, `/nowplaying`, `/volume`, `/shuffle`, `/loop`, `/remove`, `/clear`,
-`/join`, `/leave`.
+Plays YouTube audio (URLs, song-name searches, or whole playlists) via `yt-dlp` +
+FFmpeg — no external music servers needed. Every command works as a slash command
+and with the `b.` prefix.
+
+| Command | What it does |
+| ------- | ------------ |
+| `/play <query>` | Play a URL, search a name, or queue a whole playlist |
+| `/playnext <query>` | Queue a track (or playlist) at the front of the queue |
+| `/search <query>` | Search YouTube and pick from the top results |
+| `/pause` / `/resume` | Pause / resume the current track |
+| `/skip` | Skip the current track |
+| `/previous` | Go back to the previous track |
+| `/seek <time>` | Jump to a timestamp (e.g. `90` or `1:30`) |
+| `/jump <position>` | Play a queued track immediately |
+| `/move <from> <to>` | Move a track within the queue |
+| `/stop` | Stop playback and clear the queue |
+| `/queue` | Show the queue (paginated, with per-track remove buttons) |
+| `/nowplaying` | Show the current track with a live progress bar and controls |
+| `/volume <1-100>` | Set playback volume |
+| `/shuffle` | Toggle shuffle mode |
+| `/loop [none\|one\|all]` | Loop off, the track, or the whole queue |
+| `/remove <position>` | Remove a track from the queue |
+| `/clear` | Clear the queue (keeps the current track) |
+| `/join` / `/leave` | Make the bot join / leave your voice channel |
+
+The now-playing message has an interactive control panel (previous, pause/resume,
+skip, stop, loop, shuffle, volume, queue, clear) that updates its progress bar
+automatically.
 
 System dependencies on the host (Debian/Ubuntu):
 
@@ -63,8 +87,8 @@ pip install -r requirements.txt
 ```
 
 The bot auto-joins your voice channel on `/play`, auto-plays the queue, and leaves
-after 5 minutes of inactivity. Grant it **Connect** and **Speak** permissions in
-your voice channels.
+after 5 minutes of inactivity — or 60 seconds after everyone else leaves the
+channel. Grant it **Connect** and **Speak** permissions in your voice channels.
 
 ## Bot permissions
 
