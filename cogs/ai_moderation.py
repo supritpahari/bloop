@@ -1,7 +1,9 @@
 """AI Moderation cog with interactive configuration form."""
 
+import asyncio
 import json
 import logging
+from datetime import timedelta
 from typing import Optional
 
 import aiohttp
@@ -12,6 +14,7 @@ from discord.ui import View, Select, Button, Modal, TextInput
 
 from ai_moderation.service import (
     AIModerationService,
+    AIModel,
     MODERATION_LEVELS,
     MODERATION_ACTIONS,
 )
@@ -199,8 +202,14 @@ class AIModConfigView(View):
         if self.platform and self._models:
             self.add_item(ModelSelect(self._models, current=self.model_id))
         elif self.platform:
-            # Show placeholder while loading
-            self.add_item(ModelSelect([], current=None))
+            # Show placeholder while loading, or preserve saved model selection
+            if self.model_id:
+                self.add_item(ModelSelect(
+                    [AIModel(id=self.model_id, name=self.model_id, provider=self.platform)],
+                    current=self.model_id
+                ))
+            else:
+                self.add_item(ModelSelect([], current=None))
 
         # Moderation level
         self.add_item(ModerationLevelSelect(current=self.moderation_level))
@@ -255,10 +264,11 @@ class AIModConfigView(View):
         try:
             self._models = await self.service.fetch_models(self.platform, self.api_key)
             self._build_components()
-            await interaction.edit_original_response(
-                embed=self._build_embed(),
-                view=self
-            )
+            # Update the message that carries this view
+            try:
+                await interaction.message.edit(embed=self._build_embed(), view=self)
+            except (AttributeError, discord.NotFound, discord.HTTPException):
+                await interaction.edit_original_response(embed=self._build_embed(), view=self)
         except ValueError as e:
             await interaction.followup.send(f"❌ Failed to fetch models: {e}", ephemeral=True)
         except Exception as e:
@@ -277,7 +287,7 @@ class AIModConfigView(View):
         if not self.api_key:
             await interaction.response.send_message("❌ Please set an API key.", ephemeral=True)
             return
-        if self.platform and not self.model_id and self._models:
+        if self.platform and not self.model_id:
             await interaction.response.send_message("❌ Please select a model.", ephemeral=True)
             return
 
@@ -292,7 +302,7 @@ class AIModConfigView(View):
         GUILD_AI_CONFIG[self.guild_id] = config
 
         # Save to database (async, don't wait)
-        self.bot.loop.create_task(self._save_to_db(config))
+        asyncio.create_task(self._save_to_db(config))
 
         embed = self._build_embed()
         embed.title = "✅ AI Moderation Configured"
@@ -335,6 +345,16 @@ class AIModConfigView(View):
                 )
         except Exception as e:
             logger.error(f"Failed to save AI moderation config: {e}")
+
+    async def on_timeout(self):
+        await self.service.close()
+        try:
+            for child in self.children:
+                child.disabled = True
+            if hasattr(self, 'message') and self.message:
+                await self.message.edit(embed=self._build_embed(), view=self)
+        except Exception:
+            pass
 
     def _build_embed(self) -> discord.Embed:
         embed = discord.Embed(
@@ -389,8 +409,10 @@ class AIModeration(commands.Cog):
         self.service = AIModerationService()
 
     @commands.command(name="aimod", help="Configure AI moderation (server owner only)")
-    @commands.is_owner()
     async def aimod_prefix(self, ctx: commands.Context):
+        if ctx.guild and ctx.author.id != ctx.guild.owner_id:
+            await ctx.send("❌ Only the server owner can configure AI moderation.")
+            return
         await self._show_config(ctx)
 
     @app_commands.command(name="aimod", description="Configure AI moderation (server owner only)")
@@ -417,9 +439,11 @@ class AIModeration(commands.Cog):
         embed = view._build_embed()
 
         if hasattr(ctx, 'response'):
-            await ctx.response.send_message(embed=embed, view=view, ephemeral=True)
+            msg = await ctx.response.send_message(embed=embed, view=view, ephemeral=True)
         else:
-            await ctx.send(embed=embed, view=view)
+            msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+        return msg
 
     async def _load_config(self, guild_id: int) -> Optional[dict]:
         """Load config from database."""
@@ -506,7 +530,7 @@ class AIModeration(commands.Cog):
             elif action == "timeout":
                 # 10 minute timeout for first offense
                 await member.timeout(
-                    discord.utils.timedelta(minutes=10),
+                    timedelta(minutes=10),
                     reason=f"AI Moderation: {reason}"
                 )
                 await message.channel.send(

@@ -664,21 +664,26 @@ class Music(commands.Cog):
         stream_url = info.get("url")
         if not stream_url:
             raise MusicError("No playable audio stream was found for that video.")
-        return Song(
-            title=info.get("title") or "Unknown",
-            url=info.get("webpage_url") or query,
-            stream_url=stream_url,
-            duration=info.get("duration"),
-            thumbnail=info.get("thumbnail"),
-            uploader=info.get("uploader") or info.get("channel") or "Unknown",
-            requester=requester,
-        )
+        try:
+            return Song(
+                title=info.get("title") or "Unknown",
+                url=info.get("webpage_url") or query,
+                stream_url=stream_url,
+                duration=info.get("duration"),
+                thumbnail=info.get("thumbnail"),
+                uploader=info.get("uploader") or info.get("channel") or "Unknown",
+                requester=requester,
+            )
+        except Exception as exc:
+            raise MusicError(f"Couldn't load that: {str(exc).strip()[:200]}") from exc
 
     async def _safe(self, ctx, action):
         try:
             await action()
         except MusicError as exc:
             await u.reply(ctx, embed=discord.Embed(description=f"❌ {exc}", color=COLOR_ERROR))
+        except Exception as exc:
+            await u.reply(ctx, embed=discord.Embed(description=f"❌ Unexpected error: {str(exc)[:200]}", color=COLOR_ERROR))
 
     @staticmethod
     async def _defer(ctx):
