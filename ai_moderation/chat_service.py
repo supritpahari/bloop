@@ -1,5 +1,6 @@
 """AI Chat service for fetching models and generating responses."""
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -8,6 +9,24 @@ from typing import Optional, List
 import aiohttp
 
 logger = logging.getLogger(__name__)
+
+
+class AuthError(ValueError):
+    """Raised when the provider rejects the API key. Never swallowed by fallbacks."""
+
+
+def _short_error(text: str) -> str:
+    """Pull the human-readable message out of a provider error body."""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return (text or "")[:300]
+    err = data.get("error", data) if isinstance(data, dict) else data
+    if isinstance(err, dict):
+        msg = err.get("message") or err.get("detail") or err.get("code")
+        if msg:
+            return str(msg)[:300]
+    return (text or "")[:300]
 
 
 @dataclass
@@ -132,19 +151,25 @@ class AIChatService:
         if config["auth_header"]:
             headers[config["auth_header"]] = f"{config['auth_prefix']}{api_key}"
 
+        # Gemini pages its model list (default 50) - ask for the full set.
+        params = {"pageSize": 200} if provider == "Gemini" else None
+
         try:
-            async with session.get(url, headers=headers) as resp:
+            async with session.get(url, headers=headers, params=params) as resp:
+                # Auth failures must always surface - never mask them with the
+                # fallback list, or the user "successfully" configures a dead key
+                # and only finds out when the bot silently fails to reply.
                 if resp.status == 401:
-                    raise ValueError("Invalid API key")
+                    raise AuthError("Invalid API key")
                 if resp.status == 403:
-                    raise ValueError("API key doesn't have permission to list models")
+                    raise AuthError("API key doesn't have permission to list models")
                 text = await resp.text()
                 if resp.status != 200:
                     # Try fallback models for known providers
-                    if "fallback_models" in config and resp.status == 404:
-                        logger.warning(f"Models endpoint 404 for {provider}, using fallback models")
+                    if "fallback_models" in config and resp.status in (404, 405):
+                        logger.warning(f"Models endpoint {resp.status} for {provider}, using fallback models")
                         return self._get_fallback_models(config, provider)
-                    raise ValueError(f"API error ({resp.status}): {text}")
+                    raise ValueError(f"API error ({resp.status}): {text[:300]}")
 
                 # Handle non-JSON responses (e.g., text/plain)
                 try:
@@ -187,16 +212,20 @@ class AIChatService:
                 logger.info(f"Fetched {len(models)} models from {provider}")
                 return models
 
-        except aiohttp.ClientError as e:
+        except AuthError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Network error fetching models from {provider}: {e}")
             # Try fallback models on network error
             if "fallback_models" in config:
                 logger.warning(f"Network error for {provider}, using fallback models")
                 return self._get_fallback_models(config, provider)
             raise ValueError(f"Network error: {e}")
+        except ValueError:
+            raise
         except Exception as e:
             logger.error(f"Error fetching models from {provider}: {e}")
-            # Try fallback models on any error
+            # Try fallback models on any unexpected error
             if "fallback_models" in config:
                 logger.warning(f"Error for {provider}, using fallback models")
                 return self._get_fallback_models(config, provider)
@@ -269,12 +298,15 @@ class AIChatService:
         }
 
         async with session.post(url, headers=headers, json=payload) as resp:
+            text = await resp.text()
             if resp.status != 200:
-                text = await resp.text()
-                raise ValueError(f"{provider} API error ({resp.status}): {text}")
+                raise ValueError(f"{provider} API error ({resp.status}): {_short_error(text)}")
 
-            data = await resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            try:
+                data = json.loads(text)
+                return (data["choices"][0]["message"]["content"] or "").strip()
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                raise ValueError(f"Unexpected {provider} response: {text[:300]}")
 
     async def _chat_anthropic(
         self,
@@ -308,12 +340,16 @@ class AIChatService:
         }
 
         async with session.post(url, headers=headers, json=payload) as resp:
+            text = await resp.text()
             if resp.status != 200:
-                text = await resp.text()
-                raise ValueError(f"Anthropic API error ({resp.status}): {text}")
+                raise ValueError(f"Anthropic API error ({resp.status}): {_short_error(text)}")
 
-            data = await resp.json()
-            return data["content"][0]["text"].strip()
+            try:
+                data = json.loads(text)
+                parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
+                return "".join(parts).strip()
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                raise ValueError(f"Unexpected Anthropic response: {text[:300]}")
 
     async def _chat_gemini(
         self,
@@ -347,9 +383,26 @@ class AIChatService:
         }
 
         async with session.post(url, headers=headers, params=params, json=payload) as resp:
+            text = await resp.text()
             if resp.status != 200:
-                text = await resp.text()
-                raise ValueError(f"Gemini API error ({resp.status}): {text}")
+                raise ValueError(f"Gemini API error ({resp.status}): {_short_error(text)}")
 
-            data = await resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                raise ValueError(f"Unexpected Gemini response: {text[:300]}")
+
+            candidates = data.get("candidates") or []
+            if not candidates:
+                blocked = (data.get("promptFeedback") or {}).get("blockReason")
+                raise ValueError(f"Gemini returned no candidates{f' (blocked: {blocked})' if blocked else ''}")
+
+            candidate = candidates[0]
+            parts = (candidate.get("content") or {}).get("parts") or []
+            out = "".join(p.get("text", "") for p in parts).strip()
+            if not out:
+                reason = candidate.get("finishReason")
+                if reason == "MAX_TOKENS":
+                    raise ValueError("Gemini hit the output token limit before producing text")
+                raise ValueError(f"Gemini returned an empty response (finishReason={reason})")
+            return out

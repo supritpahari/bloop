@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import signal
 import sys
@@ -13,6 +14,16 @@ from economy.db import Database
 from economy.db import init_crop_grow
 
 load_dotenv()
+
+# bot.start() (unlike bot.run()) does NOT configure logging, so cog logger.info/
+# warning calls were being silently dropped - which made debugging the AI cogs
+# impossible. Set LOG_LEVEL=DEBUG in .env for more detail.
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logging.getLogger("discord").setLevel(logging.WARNING)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "b."
