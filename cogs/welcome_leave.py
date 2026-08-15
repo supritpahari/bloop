@@ -60,12 +60,12 @@ class WelcomeLeave(commands.Cog):
 
     # ------------------ Leave command ------------------
 
-    @commands.command(name="leave", help="Set leave message (server owner / admin)")
+    @commands.command(name="setleave", aliases=["leavemessage"], help="Set leave message (server owner / admin)", usage="b.setleave [#channel] [message]")
     @commands.has_permissions(administrator=True)
     async def leave_prefix(self, ctx: commands.Context, channel: discord.TextChannel = None, *, message_template: str = ""):
         await self._set_leave(ctx, channel or ctx.channel, message_template or "Goodbye {mention}! Thanks for being here.")
 
-    @app_commands.command(name="leave", description="Set leave message (server owner / admin)")
+    @app_commands.command(name="setleave", description="Set leave message (server owner / admin)")
     @app_commands.describe(
         channel="Channel to send leave messages",
         message_template="Message template (use {mention} and {guild})",
