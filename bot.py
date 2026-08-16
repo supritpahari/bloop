@@ -159,6 +159,7 @@ async def main():
         await bot.load_extension("cogs.ai_chat")
         await bot.load_extension("cogs.xp_level")
         await bot.load_extension("cogs.welcome_leave")
+        await bot.load_extension("cogs.embed")
         try:
             await bot.start(TOKEN)
         except asyncio.CancelledError:
@@ -176,15 +177,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nShutdown complete")
         sys.exit(0)
-@bot.command(name="embed", aliases=["/embed"])
-@commands.has_permissions(manage_messages=True)
-async def embed_cmd(ctx):
-    await ctx.send("Title | Text | Footer | Color | Channel")
-    def check(m): return m.author == ctx.author and m.channel == ctx.channel
-    msg = await bot.wait_for("message", check=check, timeout=120)
-    parts = msg.content.split("|")
-    if len(parts)!=5: return await ctx.send("Invalid format.")
-    emb = discord.Embed(title=parts[0].strip(), description=parts[1].strip(), color=int(parts[3].strip(), 16))
-    emb.set_footer(text=parts[2].strip())
-    ch = bot.get_channel(int(parts[4].strip()))
-    await ch.send(embed=emb)

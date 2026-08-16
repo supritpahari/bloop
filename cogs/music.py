@@ -610,6 +610,22 @@ class GuildPlayer:
             self._alone_task.cancel()
         self._alone_task = None
 
+    def reattach(self) -> bool:
+        """Re-adopt the guild's live voice client if we lost track of ours.
+
+        Our own `self.voice` bookkeeping and discord.py's `guild.voice_client`
+        can drift apart (e.g. /stop keeps the client connected while clearing
+        state). Returns True if we hold a connected voice client afterwards.
+        """
+        if self.voice is not None and self.voice.is_connected():
+            return True
+        guild = self.bot.get_guild(self.guild_id)
+        live = guild.voice_client if guild else None
+        if live is not None and live.is_connected():
+            self.voice = live
+            return True
+        return False
+
     async def schedule_idle(self):
         self.cancel_idle()
         self._idle_task = asyncio.create_task(self._idle_worker())
@@ -625,6 +641,9 @@ class GuildPlayer:
                 await self.voice.disconnect()
             except Exception:
                 pass
+            finally:
+                # Drop the dead client so a future b.play connects cleanly.
+                self.voice = None
 
     def _add_history(self, song: Optional[Song]):
         if song is None:
@@ -655,7 +674,10 @@ class GuildPlayer:
 
     async def _start_playback(self, song: Song, *, announce: bool = True, start_seconds: Optional[float] = None):
         if not self.voice or not self.voice.is_connected():
-            raise MusicError("I'm not connected to a voice channel anymore.")
+            # Try to re-adopt the guild's live voice client before giving up —
+            # it can still be connected even when our reference is stale.
+            if not self.reattach():
+                raise MusicError("I'm not connected to a voice channel anymore.")
         if not discord.opus.is_loaded():
             for lib in _OPUS_LIBS:
                 try:
@@ -720,8 +742,19 @@ class GuildPlayer:
         asyncio.run_coroutine_threadsafe(self._handle_track_end(error), self.bot.loop)
 
     async def _handle_track_end(self, error: Optional[Exception]):
-        if self._stopping or not self.voice or not self.voice.is_connected():
+        if self._stopping:
             return
+        if not self.voice or not self.voice.is_connected():
+            # Voice session dropped right at track end (server migration etc.).
+            # Re-adopt the live client if there is one; otherwise reset cleanly
+            # instead of silently stalling with a current track that never ends.
+            if not self.reattach():
+                self._add_history(self.current)
+                self.current = None
+                self.queue.clear()
+                await self.bot.change_presence(activity=None)
+                await self.schedule_idle()
+                return
 
         # A /previous or /jump asked us to switch to a specific track.
         if self._force_next is not None:
@@ -772,6 +805,14 @@ class GuildPlayer:
                 await self._start_playback(next_song)
                 return
             except MusicError as exc:
+                if not self.voice or not self.voice.is_connected():
+                    # Connection problem, not a bad track — put it back and stop
+                    # draining the queue into "skipping" messages.
+                    self.queue.insert(0, next_song)
+                    self.current = None
+                    await self.bot.change_presence(activity=None)
+                    await self.schedule_idle()
+                    return
                 await self._notify(content=f"⚠️ {exc} — skipping.")
                 continue
 
@@ -848,11 +889,18 @@ class GuildPlayer:
             try:
                 if self.voice.is_playing() or self.voice.is_paused():
                     self.voice.stop()
-                if disconnect and self.voice.is_connected():
-                    asyncio.create_task(self.voice.disconnect())
             except Exception:
                 pass
-        self.voice = None
+            if disconnect:
+                try:
+                    if self.voice.is_connected():
+                        asyncio.create_task(self.voice.disconnect())
+                except Exception:
+                    pass
+                self.voice = None
+        # NB: with disconnect=False the client is still in the voice channel, so
+        # we deliberately keep the `self.voice` reference — a later `b.play`
+        # must reuse it instead of trying to connect again.
         asyncio.create_task(self.bot.change_presence(activity=None))
 
 
@@ -923,14 +971,43 @@ class Music(commands.Cog):
         if not channel.permissions_for(guild.me).speak:
             raise MusicError(f"I don't have permission to **speak** in {channel.mention}.")
         player = self._player(guild.id, text_channel=getattr(ctx, "channel", None))
+
+        # Reuse any live connection first — our own bookkeeping and discord.py's
+        # voice state can drift (e.g. /stop keeps the client connected while
+        # clearing state), which used to fail the reconnect with a confusing
+        # "Already connected to a voice channel" error.
+        player.reattach()
         if player.voice and player.voice.is_connected():
             if player.voice.channel.id != channel.id:
                 raise MusicError("I'm already playing in another voice channel — join me there or use `/leave` first.")
             return player
+
+        # Drop a stale client object (alive but not connected) — otherwise
+        # channel.connect() below fails with "Already connected to a voice channel".
+        stale = player.voice or guild.voice_client
+        if stale is not None:
+            try:
+                await stale.disconnect(force=True)
+            except Exception:
+                pass
+            try:
+                stale.cleanup()
+            except Exception:
+                pass
+            player.voice = None
+
         try:
             player.voice = await channel.connect()
         except discord.ClientException as exc:
+            # Last resort: discord still holds a connected client for this guild
+            # (a previous disconnect was still in flight) — adopt it and carry on
+            # instead of erroring out.
             player.voice = None
+            player.reattach()
+            if player.voice and player.voice.is_connected():
+                if player.voice.channel.id == channel.id:
+                    return player
+                raise MusicError("I'm already playing in another voice channel — join me there or use `/leave` first.")
             raise MusicError(f"Couldn't join {channel.mention}: {exc}") from exc
         return player
 

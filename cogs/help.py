@@ -13,6 +13,7 @@ from discord.ui import View, Select, Button
 # Canonical category key -> (emoji, display name)
 CATEGORY_STYLE = {
     "Info": ("📘", "Info"),
+    "Embed": ("📝", "Embeds"),
     "Moderation": ("🛡️", "Moderation"),
     "Music": ("🎵", "Music"),
     "Wallet": ("👛", "Wallet"),
@@ -34,6 +35,7 @@ CATEGORY_STYLE = {
 # Display order for categories (canonical keys).
 CATEGORY_ORDER = [
     "Info",
+    "Embed",
     "Moderation",
     "Music",
     "Wallet",
