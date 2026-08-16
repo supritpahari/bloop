@@ -34,6 +34,7 @@ python bot.py
 | `b.echo ...`   | `/echo`     | Repeats your message            | Anyone              |
 | `b.avatar [@user]` | `/avatar`  | Shows a big profile picture     | Anyone              |
 | `b.userinfo [@user]` | `/userinfo` | Shows user details (ID, joined, roles, ...) | Anyone    |
+| `b.embed`      | `/embed`    | Builds and posts a custom embed (`b.embed` asks for `Title | Text | Footer | Color | Channel` in chat, `/embed` opens a form) | Manage Messages |
 | `b.kick @user [reason]` | `/kick` | Kicks a member              | Kick Members        |
 | `b.ban @user [reason]` | `/ban`   | Bans a member               | Ban Members         |
 | `b.mute @user 10m [reason]` | `/mute` | Timeouts a member        | Moderate Members    |
