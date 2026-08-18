@@ -1,5 +1,6 @@
-"""Async SQLite layer for the ticket system: per-guild config and ticket state."""
+"""Async SQLite layer for the ticket system: setup config and ticket state."""
 
+import json
 import os
 
 import aiosqlite
@@ -7,12 +8,11 @@ import aiosqlite
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bloop_tickets.db")
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS ticket_config (
+CREATE TABLE IF NOT EXISTS ticket_setup (
     guild_id INTEGER PRIMARY KEY,
+    panel_channel_id INTEGER,
     category_id INTEGER,
-    support_role_id INTEGER,
-    transcript_channel_id INTEGER,
-    welcome_message TEXT NOT NULL DEFAULT '',
+    role_ids TEXT NOT NULL DEFAULT '[]',
     counter INTEGER NOT NULL DEFAULT 0
 );
 
@@ -51,73 +51,67 @@ class TicketsDB:
         if self.conn:
             await self.conn.close()
 
-    # ------------------------------------------------------------ config
+    # ------------------------------------------------------------ setup
 
-    async def get_config(self, guild_id: int) -> dict | None:
+    async def get_setup(self, guild_id: int) -> dict | None:
+        """Guild ticket config; `role_ids` is returned as a parsed list of ints."""
         cur = await self.conn.execute(
-            "SELECT * FROM ticket_config WHERE guild_id = ?", (guild_id,)
+            "SELECT * FROM ticket_setup WHERE guild_id = ?", (guild_id,)
         )
         row = await cur.fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        cfg = dict(row)
+        try:
+            cfg["role_ids"] = [int(r) for r in json.loads(cfg.get("role_ids") or "[]")]
+        except (TypeError, ValueError):
+            cfg["role_ids"] = []
+        return cfg
 
-    async def set_config(
+    async def set_setup(
         self,
         guild_id: int,
         *,
+        panel_channel_id: int | None = None,
         category_id: int | None = None,
-        support_role_id: int | None = None,
-        transcript_channel_id: int | None = None,
-        welcome_message: str | None = None,
+        role_ids: list[int] | None = None,
     ) -> None:
-        """Upsert config fields without clobbering ones that aren't provided."""
-        current = await self.get_config(guild_id)
+        """Upsert setup fields without clobbering ones that aren't provided."""
+        current = await self.get_setup(guild_id)
         if current is None:
-            current = {"category_id": None, "support_role_id": None,
-                       "transcript_channel_id": None, "welcome_message": ""}
-        merged = {
-            "category_id": category_id if category_id is not None else current["category_id"],
-            "support_role_id": support_role_id if support_role_id is not None else current["support_role_id"],
-            "transcript_channel_id": (
-                transcript_channel_id if transcript_channel_id is not None
-                else current["transcript_channel_id"]
-            ),
-            "welcome_message": welcome_message if welcome_message is not None else current["welcome_message"],
-        }
+            current = {"panel_channel_id": None, "category_id": None, "role_ids": []}
         await self.conn.execute(
             """
-            INSERT INTO ticket_config (guild_id, category_id, support_role_id,
-                                       transcript_channel_id, welcome_message)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO ticket_setup (guild_id, panel_channel_id, category_id, role_ids)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(guild_id) DO UPDATE SET
+                panel_channel_id = excluded.panel_channel_id,
                 category_id = excluded.category_id,
-                support_role_id = excluded.support_role_id,
-                transcript_channel_id = excluded.transcript_channel_id,
-                welcome_message = excluded.welcome_message
+                role_ids = excluded.role_ids
             """,
             (
                 guild_id,
-                merged["category_id"],
-                merged["support_role_id"],
-                merged["transcript_channel_id"],
-                merged["welcome_message"],
+                panel_channel_id if panel_channel_id is not None else current["panel_channel_id"],
+                category_id if category_id is not None else current["category_id"],
+                json.dumps(role_ids if role_ids is not None else current["role_ids"]),
             ),
         )
         await self.conn.commit()
-
-    # ------------------------------------------------------------ tickets
 
     async def next_ticket_number(self, guild_id: int) -> int:
         """Atomically reserve and return the next sequential ticket number."""
         await self.conn.execute(
             """
-            INSERT INTO ticket_config (guild_id, counter) VALUES (?, 1)
+            INSERT INTO ticket_setup (guild_id, counter) VALUES (?, 1)
             ON CONFLICT(guild_id) DO UPDATE SET counter = counter + 1
             """,
             (guild_id,),
         )
         await self.conn.commit()
-        config = await self.get_config(guild_id)
-        return config["counter"]
+        cfg = await self.get_setup(guild_id)
+        return cfg["counter"]
+
+    # ------------------------------------------------------------ tickets
 
     async def create_ticket(
         self, guild_id: int, ticket_id: int, channel_id: int, creator_id: int, topic: str = ""
@@ -143,20 +137,7 @@ class TicketsDB:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def open_tickets(self, guild_id: int) -> list[dict]:
-        cur = await self.conn.execute(
-            "SELECT * FROM tickets WHERE guild_id = ? AND status = 'open' ORDER BY ticket_id",
-            (guild_id,),
-        )
-        return [dict(row) for row in await cur.fetchall()]
-
-    async def set_claimed(self, channel_id: int, claimed_by: int) -> None:
-        await self.conn.execute(
-            "UPDATE tickets SET claimed_by = ? WHERE channel_id = ?", (claimed_by, channel_id)
-        )
-        await self.conn.commit()
-
-    async def close_ticket(self, channel_id: int, closed_by: int, reason: str | None) -> None:
+    async def close_ticket(self, channel_id: int, closed_by: int | None, reason: str | None) -> None:
         await self.conn.execute(
             """
             UPDATE tickets
@@ -167,16 +148,3 @@ class TicketsDB:
             (closed_by, reason, channel_id),
         )
         await self.conn.commit()
-
-    async def ticket_stats(self, guild_id: int) -> dict:
-        cur = await self.conn.execute(
-            """
-            SELECT
-                SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open,
-                COUNT(*) AS total
-            FROM tickets WHERE guild_id = ?
-            """,
-            (guild_id,),
-        )
-        row = await cur.fetchone()
-        return {"open": row["open"] or 0, "total": row["total"] or 0}

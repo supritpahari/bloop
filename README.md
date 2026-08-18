@@ -49,23 +49,20 @@ above you, the server owner, or yourself).
 
 ## Tickets
 
-A support-ticket system with private per-user channels, a click-to-open panel,
-claiming, and transcripts.
+One admin command, a click-to-open panel, and approval-based closing with an AI
+summary.
 
 | Prefix (`b.`) | Slash (`/`) | What it does | Who can use it |
 | -------------- | ----------- | ------------ | -------------- |
-| `b.ticketsetup [@role] [#category] [#channel] [welcome]` | `/ticketsetup` | Configure the ticket system (auto-creates a hidden 🎫 Tickets category if none is given) | Administrator |
-| `b.ticketpanel [#channel] [text]` | `/ticketpanel` | Post the panel with the **Create Ticket** button | Administrator |
-| — | 🎫 button | Opens a private `ticket-0042` channel (one open ticket per user) | Anyone |
-| `b.claim` | `/claim` | Claim the ticket you're in | Staff |
-| `b.adduser @user` / `b.removeuser @user` | `/adduser` / `/removeuser` | Add or remove someone from the ticket | Staff |
-| `b.tickets` | `/tickets` | List open tickets + stats | Staff |
-| `b.close [reason]` | `/close` | Close the ticket, save a transcript, delete the channel | Creator or staff |
+| `b.ticket` | `/ticket` | Opens a setup form: pick the panel channel and the roles to add to tickets, then **Save** — posts the panel message with the **Open Ticket** button | Administrator |
+| — | 🎫 **Open Ticket** button | Opens a private `ticket-0042` channel with the configured roles added (one open ticket per user) | Anyone |
+| `b.closeticket` | `/closeticket` | Request closing the ticket you're in — the other side must approve: staff approve if the creator asks, the creator approves if staff ask | Ticket creator or staff |
 
-**Staff** = anyone with Administrator or the configured support role. Setup needs the
-bot to have **Manage Channels** and **Manage Roles**. Closing a ticket posts a
-`.txt` transcript (up to the newest 500 messages) to the configured transcript
-channel. Ticket state is stored in `bloop_tickets.db`, and panels survive bot
+Setup needs the bot to have **Manage Channels** and **Manage Roles**; ticket
+channels are created under an auto-created hidden 🎫 Tickets category. On close,
+the ticket creator is DM'd a short AI summary of the conversation, generated
+with the same AI configured via `/aichat` (no AI configured → the DM says so).
+State is stored in `bloop_tickets.db`, and the panel button survives bot
 restarts.
 
 ## Music
