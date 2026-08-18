@@ -47,6 +47,23 @@ Moderation commands can be used by anyone with **Administrator** or the specific
 permission listed. They also respect role hierarchy (you can't kick/ban/mute someone
 above you, the server owner, or yourself).
 
+## AI moderation
+
+The server owner can configure automatic message scanning with `b.aimod` or
+`/aimod`. Confirmed violations create strikes that reset after seven
+violation-free days. Punishments escalate even when the AI model keeps suggesting
+only a warning:
+
+- **Strict:** 10-minute timeout → 1-hour timeout → kick → ban
+- **Moderate:** warning → 10-minute timeout → 1-hour timeout → kick → ban
+- **Lenient:** two warnings → 10-minute timeout → 1-hour timeout → kick → ban
+
+Use `b.aimodreset @member` or `/aimodreset` to clear a member's strikes. For every
+automatic action to work, grant the bot **Moderate Members**, **Kick Members**, and
+**Ban Members**, then place its highest role above the members it should moderate.
+If Discord denies an action, the bot posts the missing permission or role problem
+instead of failing silently.
+
 ## Tickets
 
 One admin command, a click-to-open panel, and approval-based closing with an AI

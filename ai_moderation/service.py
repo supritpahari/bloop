@@ -395,6 +395,7 @@ MODERATION LEVEL: {moderation_level.upper()} - {level_config['description']}
 THRESHOLDS (score >= threshold = violation):
 - Hate Speech: {thresholds['hate_speech']}
 - Harassment: {thresholds['harassment']}
+- Profanity / Abusive Language: {thresholds['profanity']}
 - Violence: {thresholds['violence']}
 - Sexual Content: {thresholds['sexual']}
 - Spam: {thresholds['spam']}
@@ -411,7 +412,8 @@ RESPOND WITH VALID JSON ONLY:
   "categories": ["category1", "category2"]
 }}
 
-Categories: hate_speech, harassment, violence, sexual, spam, self_harm, illegal
+Categories: hate_speech, harassment, profanity, violence, sexual, spam, self_harm, illegal
+Treat insults, targeted abusive language, and disallowed curse words as profanity or harassment according to the selected threshold.
 Actions escalate: none -> warn -> timeout -> kick -> ban
 Only return the JSON object, no extra text."""
 
@@ -516,6 +518,7 @@ MODERATION_LEVELS = {
         "thresholds": {
             "hate_speech": 0.3,
             "harassment": 0.3,
+            "profanity": 0.3,
             "violence": 0.3,
             "sexual": 0.3,
             "spam": 0.4,
@@ -529,6 +532,7 @@ MODERATION_LEVELS = {
         "thresholds": {
             "hate_speech": 0.5,
             "harassment": 0.5,
+            "profanity": 0.5,
             "violence": 0.4,
             "sexual": 0.5,
             "spam": 0.6,
@@ -542,6 +546,7 @@ MODERATION_LEVELS = {
         "thresholds": {
             "hate_speech": 0.7,
             "harassment": 0.7,
+            "profanity": 0.75,
             "violence": 0.6,
             "sexual": 0.7,
             "spam": 0.8,
