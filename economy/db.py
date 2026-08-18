@@ -139,6 +139,14 @@ CREATE TABLE IF NOT EXISTS ai_moderation (
     config TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS ai_moderation_offenses (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    strikes INTEGER NOT NULL DEFAULT 0,
+    last_offense_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (guild_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS ai_chat (
     guild_id INTEGER PRIMARY KEY,
     config TEXT NOT NULL
@@ -186,6 +194,10 @@ class Database:
             )
             await self.conn.execute(
                 "DELETE FROM transactions WHERE id NOT IN (SELECT id FROM transactions ORDER BY id DESC LIMIT 5000)"
+            )
+            await self.conn.execute(
+                "DELETE FROM ai_moderation_offenses "
+                "WHERE last_offense_at < datetime('now', '-7 days')"
             )
             await self.conn.commit()
             # If the journal was aborted mid-write it stays on disk; delete it safely.
@@ -258,6 +270,44 @@ class Database:
     async def fetchall(self, sql: str, params: tuple = ()):
         cur = await self.conn.execute(sql, params)
         return await cur.fetchall()
+
+    # ---------------------------------------------------------- AI moderation
+
+    async def record_ai_moderation_offense(self, guild_id: int, user_id: int) -> int:
+        """Record a violation and return the member's active strike count.
+
+        Strikes expire after seven violation-free days. The moderation cog
+        serializes calls per guild member, so the upsert and following read
+        represent one member's next offense even while other members are being
+        moderated.
+        """
+        await self.execute(
+            """
+            INSERT INTO ai_moderation_offenses
+                (guild_id, user_id, strikes, last_offense_at)
+            VALUES (?, ?, 1, datetime('now'))
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                strikes = CASE
+                    WHEN last_offense_at < datetime('now', '-7 days') THEN 1
+                    ELSE strikes + 1
+                END,
+                last_offense_at = datetime('now')
+            """,
+            (guild_id, user_id),
+        )
+        row = await self.fetchone(
+            "SELECT strikes FROM ai_moderation_offenses "
+            "WHERE guild_id = ? AND user_id = ?",
+            (guild_id, user_id),
+        )
+        return int(row["strikes"]) if row else 1
+
+    async def reset_ai_moderation_offenses(self, guild_id: int, user_id: int) -> None:
+        """Clear a member's active AI moderation strikes."""
+        await self.execute(
+            "DELETE FROM ai_moderation_offenses WHERE guild_id = ? AND user_id = ?",
+            (guild_id, user_id),
+        )
 
     # ------------------------------------------------------------------ users
 

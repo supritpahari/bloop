@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+import math
+from collections import defaultdict
 from datetime import timedelta
 from typing import Optional
 
@@ -12,12 +14,12 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ui import View, Select, Button, Modal, TextInput
 
-from ai_moderation.service import (
-    AIModerationService,
-    AIModel,
-    MODERATION_LEVELS,
-    MODERATION_ACTIONS,
+from ai_moderation.policy import (
+    OFFENSE_WINDOW_DAYS,
+    describe_escalation,
+    determine_enforcement,
 )
+from ai_moderation.service import AIModerationService, AIModel, MODERATION_LEVELS
 
 logger = logging.getLogger(__name__)
 
@@ -397,6 +399,15 @@ class AIModConfigView(View):
                 inline=False
             )
 
+        embed.add_field(
+            name="Automatic Actions",
+            value=(
+                describe_escalation(self.moderation_level)
+                + f"\nStrikes reset after {OFFENSE_WINDOW_DAYS} violation-free days."
+            ),
+            inline=False,
+        )
+
         embed.set_footer(text="Select options above, then click Save")
         return embed
 
@@ -407,6 +418,9 @@ class AIModeration(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.service = AIModerationService()
+        # AI requests for separate messages finish out of order. Serializing the
+        # strike update and punishment per member keeps escalation deterministic.
+        self._member_locks: dict[tuple[int, int], asyncio.Lock] = defaultdict(asyncio.Lock)
 
     @commands.command(name="aimod", help="Configure AI moderation (server owner only)")
     async def aimod_prefix(self, ctx: commands.Context):
@@ -426,6 +440,41 @@ class AIModeration(commands.Cog):
             )
             return
         await self._show_config(interaction)
+
+    @commands.command(
+        name="aimodreset",
+        help="Clear a member's AI moderation strikes (server owner only)",
+        usage="b.aimodreset <@user>",
+    )
+    @commands.guild_only()
+    async def aimodreset_prefix(self, ctx: commands.Context, member: discord.Member):
+        if ctx.author.id != ctx.guild.owner_id:
+            await ctx.send("❌ Only the server owner can clear AI moderation strikes.")
+            return
+        await self.bot.db.reset_ai_moderation_offenses(ctx.guild.id, member.id)
+        await ctx.send(f"✅ Cleared AI moderation strikes for {member.mention}.")
+
+    @app_commands.command(
+        name="aimodreset",
+        description="Clear a member's AI moderation strikes (server owner only)",
+    )
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    @app_commands.describe(member="Member whose AI moderation strikes should be cleared")
+    async def aimodreset_slash(
+        self, interaction: discord.Interaction, member: discord.Member
+    ):
+        if interaction.user.id != interaction.guild.owner_id:
+            await interaction.response.send_message(
+                "❌ Only the server owner can clear AI moderation strikes.",
+                ephemeral=True,
+            )
+            return
+        await self.bot.db.reset_ai_moderation_offenses(interaction.guild.id, member.id)
+        await interaction.response.send_message(
+            f"✅ Cleared AI moderation strikes for {member.mention}.",
+            ephemeral=True,
+        )
 
     async def _show_config(self, ctx):
         """Show the AI moderation configuration form."""
@@ -486,73 +535,212 @@ class AIModeration(commands.Cog):
         if not config or not config.get("enabled"):
             return
 
-        # Skip if bot lacks permissions
-        me = message.guild.me
-        if not me or not me.guild_permissions.moderate_members:
+        if not message.content.strip():
             return
 
         try:
-            # Analyze message
+            # The AI classifies the violation; a deterministic strike policy
+            # below chooses the minimum punishment for repeat behavior.
+            moderation_level = config.get("moderation_level", "moderate")
             result = await self.service.moderate_message(
                 provider=config["platform"],
                 model_id=config["model_id"],
                 api_key=config["api_key"],
                 message_content=message.content,
-                moderation_level=config["moderation_level"],
+                moderation_level=moderation_level,
                 guild_context=f"Server: {message.guild.name}, Channel: #{message.channel.name}"
             )
 
-            action = result.get("action", "none")
-            reason = result.get("reason", "AI-detected violation")
-            confidence = result.get("confidence", 0)
+            suggested_action = result.get("action", "none")
+            reason = str(result.get("reason") or "AI-detected violation")[:400]
+            try:
+                confidence = float(result.get("confidence", 0))
+                if not math.isfinite(confidence):
+                    confidence = 0.0
+                confidence = max(0.0, min(confidence, 1.0))
+            except (TypeError, ValueError):
+                confidence = 0.0
 
-            if action == "none" or confidence < 0.5:
+            if suggested_action == "none":
                 return
 
-            # Apply moderation action
-            await self._apply_action(message, action, reason, confidence)
+            # Respect each level/category threshold rather than the previous
+            # hard-coded 0.5 check, which accidentally disabled strict-mode
+            # actions with valid confidence scores between 0.3 and 0.5.
+            level_config = MODERATION_LEVELS.get(
+                moderation_level, MODERATION_LEVELS["moderate"]
+            )
+            thresholds = level_config["thresholds"]
+            categories = result.get("categories") or []
+            required_confidence = min(
+                (thresholds[c] for c in categories if c in thresholds),
+                default=min(thresholds.values()),
+            )
+            if confidence < required_confidence:
+                return
 
-        except Exception as e:
-            logger.error(f"AI moderation error: {e}")
+            lock_key = (message.guild.id, message.author.id)
+            async with self._member_locks[lock_key]:
+                strike_count = await self.bot.db.record_ai_moderation_offense(
+                    message.guild.id, message.author.id
+                )
+                enforcement = determine_enforcement(
+                    moderation_level, strike_count, suggested_action
+                )
+                await self._apply_action(
+                    message=message,
+                    action=enforcement.action,
+                    reason=reason,
+                    confidence=confidence,
+                    strike_count=strike_count,
+                    timeout_seconds=enforcement.timeout_seconds,
+                )
 
-    async def _apply_action(self, message: discord.Message, action: str, reason: str, confidence: float):
-        """Apply the moderation action."""
+        except Exception:
+            logger.exception("AI moderation failed for message %s", message.id)
+
+    async def _apply_action(
+        self,
+        message: discord.Message,
+        action: str,
+        reason: str,
+        confidence: float,
+        strike_count: int,
+        timeout_seconds: int | None = None,
+    ) -> bool:
+        """Apply an enforcement action and report permission failures visibly."""
         member = message.author
         guild = message.guild
+        if action not in {"warn", "timeout", "kick", "ban"}:
+            logger.error("Refusing unknown AI moderation action: %r", action)
+            return False
 
-        try:
-            if action == "warn":
+        display_reason = discord.utils.escape_mentions(reason)
+        details = (
+            f"Reason: {display_reason} (Confidence: {confidence:.0%}, "
+            f"active strike: {strike_count})"
+        )
+
+        if action == "warn":
+            try:
                 await message.reply(
-                    f"⚠️ **Warning**: Your message was flagged by AI moderation.\n"
-                    f"Reason: {reason} (Confidence: {confidence:.0%})",
-                    mention_author=True
+                    "⚠️ **AI moderation warning**\n"
+                    f"{details}\nRepeated violations automatically escalate to a "
+                    "timeout, kick, and ban.",
+                    mention_author=True,
+                    allowed_mentions=discord.AllowedMentions(
+                        everyone=False,
+                        roles=False,
+                        users=[member],
+                        replied_user=True,
+                    ),
                 )
-            elif action == "timeout":
-                # 10 minute timeout for first offense
+                return True
+            except discord.HTTPException as exc:
+                logger.warning("Could not warn %s in %s: %s", member, guild, exc)
+                return False
+
+        me = guild.me
+        permission_by_action = {
+            "timeout": "moderate_members",
+            "kick": "kick_members",
+            "ban": "ban_members",
+        }
+        permission = permission_by_action.get(action)
+        if not me or not permission:
+            await self._report_action_failure(message, action, "the bot member was unavailable")
+            return False
+        if not getattr(me.guild_permissions, permission, False):
+            readable_permission = permission.replace("_", " ").title()
+            await self._report_action_failure(
+                message, action, f"I need the **{readable_permission}** permission"
+            )
+            return False
+        if member.top_role >= me.top_role:
+            await self._report_action_failure(
+                message,
+                action,
+                "the member's highest role is equal to or above my highest role",
+            )
+            return False
+
+        audit_reason = f"AI moderation strike {strike_count}: {reason}"[:512]
+        try:
+            if action == "timeout":
+                timeout_seconds = timeout_seconds or 10 * 60
                 await member.timeout(
-                    timedelta(minutes=10),
-                    reason=f"AI Moderation: {reason}"
+                    timedelta(seconds=timeout_seconds), reason=audit_reason
                 )
-                await message.channel.send(
-                    f"🔇 {member.mention} timed out for 10 minutes.\n"
-                    f"Reason: {reason} (Confidence: {confidence:.0%})"
-                )
+                duration = self._format_timeout(timeout_seconds)
+                notice = f"🔇 {member.mention} was timed out for {duration}.\n{details}"
             elif action == "kick":
-                await member.kick(reason=f"AI Moderation: {reason}")
-                await message.channel.send(
-                    f"👢 {member.mention} was kicked.\n"
-                    f"Reason: {reason} (Confidence: {confidence:.0%})"
-                )
-            elif action == "ban":
-                await member.ban(reason=f"AI Moderation: {reason}")
-                await message.channel.send(
-                    f"🔨 {member.mention} was banned.\n"
-                    f"Reason: {reason} (Confidence: {confidence:.0%})"
-                )
+                await member.kick(reason=audit_reason)
+                notice = f"👢 {member.mention} was kicked.\n{details}"
+            else:  # ban
+                await member.ban(reason=audit_reason)
+                notice = f"🔨 {member.mention} was banned.\n{details}"
         except discord.Forbidden:
-            logger.warning(f"Missing permissions to {action} {member} in {guild}")
-        except Exception as e:
-            logger.error(f"Failed to apply {action}: {e}")
+            await self._report_action_failure(
+                message,
+                action,
+                "Discord denied the action; check my permissions and role position",
+            )
+            return False
+        except discord.HTTPException as exc:
+            logger.warning("Discord rejected AI moderation action %s: %s", action, exc)
+            await self._report_action_failure(
+                message, action, "Discord rejected the action"
+            )
+            return False
+
+        # The punishment has already succeeded, so a missing Send Messages
+        # permission must not make it look like enforcement itself failed.
+        try:
+            await message.channel.send(
+                notice,
+                allowed_mentions=discord.AllowedMentions(
+                    everyone=False, roles=False, users=[member]
+                ),
+            )
+        except discord.HTTPException as exc:
+            logger.warning(
+                "Applied %s to %s in %s but could not announce it: %s",
+                action,
+                member,
+                guild,
+                exc,
+            )
+        return True
+
+    async def _report_action_failure(
+        self, message: discord.Message, action: str, explanation: str
+    ) -> None:
+        """Log and, when possible, tell moderators why enforcement failed."""
+        logger.warning(
+            "Could not apply AI moderation action %s to %s in %s: %s",
+            action,
+            message.author,
+            message.guild,
+            explanation,
+        )
+        try:
+            await message.channel.send(
+                f"⚠️ {message.author.mention} reached an AI moderation **{action}**, "
+                f"but I could not apply it because {explanation}.",
+                allowed_mentions=discord.AllowedMentions(
+                    everyone=False, roles=False, users=[message.author]
+                ),
+            )
+        except discord.HTTPException:
+            pass
+
+    @staticmethod
+    def _format_timeout(seconds: int) -> str:
+        if seconds % 3600 == 0:
+            hours = seconds // 3600
+            return f"{hours} hour{'s' if hours != 1 else ''}"
+        minutes = max(1, seconds // 60)
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
 
     async def cog_unload(self):
         await self.service.close()
