@@ -39,6 +39,8 @@ python bot.py
 | `b.ban @user [reason]` | `/ban`   | Bans a member               | Ban Members         |
 | `b.mute @user 10m [reason]` | `/mute` | Timeouts a member        | Moderate Members    |
 | `b.unmute @user` | `/unmute`   | Removes a timeout              | Moderate Members    |
+| `b.clear`      | `/clear`    | Bulk-deletes every recent message in this channel (messages older than 14 days are left alone — Discord limit) | Administrator |
+| `b.lock`       | `/lock`     | Locks the channel so only admins can send messages | Administrator |
 
 Moderation commands can be used by anyone with **Administrator** or the specific
 permission listed. They also respect role hierarchy (you can't kick/ban/mute someone
@@ -68,7 +70,7 @@ and with the `b.` prefix.
 | `/shuffle` | Toggle shuffle mode |
 | `/loop [none\|one\|all]` | Loop off, the track, or the whole queue |
 | `/remove <position>` | Remove a track from the queue |
-| `/clear` | Clear the queue (keeps the current track) |
+| `/clearqueue` | Clear the queue (keeps the current track) |
 | `/join` / `/leave` | Make the bot join / leave your voice channel |
 
 The now-playing message has an interactive control panel (previous, pause/resume,

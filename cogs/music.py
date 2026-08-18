@@ -927,7 +927,7 @@ class Music(commands.Cog):
     • `/shuffle` — Toggle shuffle mode
     • `/loop [none|one|all]` — Set loop mode
     • `/remove <position>` — Remove a track from queue
-    • `/clear` — Clear the queue
+    • `/clearqueue` — Clear the queue
     • `/join` — Make the bot join your voice channel
     • `/leave` — Make the bot leave the voice channel
     """
@@ -1598,12 +1598,12 @@ class Music(commands.Cog):
             description=f"🧹 Cleared **{count}** track(s) from the queue.", color=COLOR_NOW_PLAYING
         ))
 
-    @commands.command(name="clear", help="Clear the queue (keeps the current track).", usage="b.clear")
-    async def clear(self, ctx: commands.Context):
+    @commands.command(name="clearqueue", help="Clear the queue (keeps the current track).", usage="b.clearqueue")
+    async def clearqueue(self, ctx: commands.Context):
         await self._safe(ctx, lambda: self._clear(ctx))
 
-    @app_commands.command(name="clear", description="Clear the queue (keeps the current track).")
-    async def slash_clear(self, interaction: discord.Interaction):
+    @app_commands.command(name="clearqueue", description="Clear the queue (keeps the current track).")
+    async def slash_clearqueue(self, interaction: discord.Interaction):
         await self._safe(interaction, lambda: self._clear(interaction))
 
     # --------------------------------------------------------------- join
