@@ -112,6 +112,8 @@ async def shutdown(signal_name: str):
         await bot.db.close()
     if hasattr(bot, "xp_db") and bot.xp_db:
         await bot.xp_db.close()
+    if hasattr(bot, "tickets_db") and bot.tickets_db:
+        await bot.tickets_db.close()
     await bot.close()
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
@@ -127,6 +129,9 @@ async def main():
     from economy.xp_db import XPDB
     bot.xp_db = XPDB()
     await bot.xp_db.setup()
+    from economy.tickets_db import TicketsDB
+    bot.tickets_db = TicketsDB()
+    await bot.tickets_db.setup()
     disk = await db.disk_usage()
     info = await db.info()
     print(f"[db] {info['path']}")
@@ -160,6 +165,7 @@ async def main():
         await bot.load_extension("cogs.xp_level")
         await bot.load_extension("cogs.welcome_leave")
         await bot.load_extension("cogs.embed")
+        await bot.load_extension("cogs.tickets")
         try:
             await bot.start(TOKEN)
         except asyncio.CancelledError:

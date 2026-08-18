@@ -39,10 +39,31 @@ python bot.py
 | `b.ban @user [reason]` | `/ban`   | Bans a member               | Ban Members         |
 | `b.mute @user 10m [reason]` | `/mute` | Timeouts a member        | Moderate Members    |
 | `b.unmute @user` | `/unmute`   | Removes a timeout              | Moderate Members    |
+| `b.clear`      | `/clear`    | Bulk-deletes every recent message in this channel (messages older than 14 days are left alone — Discord limit) | Administrator |
+| `b.lock`       | `/lock`     | Locks the channel so only admins can send messages | Administrator |
+| `b.unlock`     | `/unlock`   | Unlocks a channel locked with `b.lock` / `/lock` | Administrator |
 
 Moderation commands can be used by anyone with **Administrator** or the specific
 permission listed. They also respect role hierarchy (you can't kick/ban/mute someone
 above you, the server owner, or yourself).
+
+## Tickets
+
+One admin command, a click-to-open panel, and approval-based closing with an AI
+summary.
+
+| Prefix (`b.`) | Slash (`/`) | What it does | Who can use it |
+| -------------- | ----------- | ------------ | -------------- |
+| `b.ticket` | `/ticket` | Opens a setup form: pick the panel channel and the roles to add to tickets, then **Save** — posts the panel message with the **Open Ticket** button | Administrator |
+| — | 🎫 **Open Ticket** button | Opens a private `ticket-0042` channel with the configured roles added (one open ticket per user) | Anyone |
+| `b.closeticket` | `/closeticket` | Request closing the ticket you're in — the other side must approve: staff approve if the creator asks, the creator approves if staff ask | Ticket creator or staff |
+
+Setup needs the bot to have **Manage Channels** and **Manage Roles**; ticket
+channels are created under an auto-created hidden 🎫 Tickets category. On close,
+the ticket creator is DM'd a short AI summary of the conversation, generated
+with the same AI configured via `/aichat` (no AI configured → the DM says so).
+State is stored in `bloop_tickets.db`, and the panel button survives bot
+restarts.
 
 ## Music
 
@@ -68,7 +89,7 @@ and with the `b.` prefix.
 | `/shuffle` | Toggle shuffle mode |
 | `/loop [none\|one\|all]` | Loop off, the track, or the whole queue |
 | `/remove <position>` | Remove a track from the queue |
-| `/clear` | Clear the queue (keeps the current track) |
+| `/clearqueue` | Clear the queue (keeps the current track) |
 | `/join` / `/leave` | Make the bot join / leave your voice channel |
 
 The now-playing message has an interactive control panel (previous, pause/resume,
