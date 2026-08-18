@@ -41,6 +41,7 @@ python bot.py
 | `b.unmute @user` | `/unmute`   | Removes a timeout              | Moderate Members    |
 | `b.clear`      | `/clear`    | Bulk-deletes every recent message in this channel (messages older than 14 days are left alone — Discord limit) | Administrator |
 | `b.lock`       | `/lock`     | Locks the channel so only admins can send messages | Administrator |
+| `b.unlock`     | `/unlock`   | Unlocks a channel locked with `b.lock` / `/lock` | Administrator |
 
 Moderation commands can be used by anyone with **Administrator** or the specific
 permission listed. They also respect role hierarchy (you can't kick/ban/mute someone

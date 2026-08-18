@@ -62,6 +62,20 @@ async def lock_channel(channel, guild: discord.Guild, actor: str) -> None:
     await channel.set_permissions(guild.default_role, overwrite=overwrites, reason=f"Channel locked by {actor}")
 
 
+async def unlock_channel(channel, guild: discord.Guild, actor: str) -> None:
+    """Restore @everyone's ability to talk and react in a channel.
+
+    Resets the permissions lock_channel denied back to None (inherit from
+    roles) instead of forcing them to True, so the channel returns to whatever
+    permissions it had before it was locked.
+    """
+    overwrites = channel.overwrites_for(guild.default_role)
+    overwrites.send_messages = None
+    overwrites.send_messages_in_threads = None
+    overwrites.add_reactions = None
+    await channel.set_permissions(guild.default_role, overwrite=overwrites, reason=f"Channel unlocked by {actor}")
+
+
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -184,6 +198,28 @@ class Moderation(commands.Cog):
             return
         await ctx.send(f"🔒 Locked {ctx.channel.mention}. Only admins can send messages here now.")
 
+    @commands.command(
+        name="unlock",
+        help="Unlock a channel locked with b.lock so members can talk again. Administrator only.",
+        usage="b.unlock",
+    )
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    @commands.bot_has_permissions(manage_channels=True)
+    async def unlock(self, ctx: commands.Context):
+        if not isinstance(ctx.channel, LOCKABLE_CHANNELS):
+            await ctx.send("I can only unlock regular channels, not threads.")
+            return
+        if ctx.channel.overwrites_for(ctx.guild.default_role).send_messages is not False:
+            await ctx.send("This channel isn't locked.")
+            return
+        try:
+            await unlock_channel(ctx.channel, ctx.guild, str(ctx.author))
+        except discord.Forbidden:
+            await ctx.send("I don't have permission to unlock this channel.")
+            return
+        await ctx.send(f"🔓 Unlocked {ctx.channel.mention}. Everyone can send messages here again.")
+
     @app_commands.command(name="kick", description="Kick a member from the server")
     @app_commands.default_permissions(kick_members=True)
     @app_commands.checks.has_permissions(kick_members=True)
@@ -300,6 +336,26 @@ class Moderation(commands.Cog):
             await interaction.response.send_message("I don't have permission to lock this channel.", ephemeral=True)
             return
         await interaction.response.send_message(f"🔒 Locked {channel.mention}. Only admins can send messages here now.")
+
+    @app_commands.command(name="unlock", description="Unlock a channel locked with /lock (admins only)")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.bot_has_permissions(manage_channels=True)
+    async def slash_unlock(self, interaction: discord.Interaction):
+        channel = interaction.channel
+        if not isinstance(channel, LOCKABLE_CHANNELS):
+            await interaction.response.send_message("I can only unlock regular channels, not threads.", ephemeral=True)
+            return
+        if channel.overwrites_for(interaction.guild.default_role).send_messages is not False:
+            await interaction.response.send_message("This channel isn't locked.", ephemeral=True)
+            return
+        try:
+            await unlock_channel(channel, interaction.guild, str(interaction.user))
+        except discord.Forbidden:
+            await interaction.response.send_message("I don't have permission to unlock this channel.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"🔓 Unlocked {channel.mention}. Everyone can send messages here again.")
 
 
 async def setup(bot: commands.Bot):
