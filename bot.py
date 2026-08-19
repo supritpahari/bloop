@@ -160,6 +160,7 @@ async def main():
         await bot.load_extension("cogs.music")
         await bot.load_extension("cogs.joke")
         await bot.load_extension("cogs.meme")
+        await bot.load_extension("cogs.neko")
         await bot.load_extension("cogs.ai_moderation")
         await bot.load_extension("cogs.ai_chat")
         await bot.load_extension("cogs.xp_level")
