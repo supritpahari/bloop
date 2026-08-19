@@ -65,6 +65,29 @@ automatic action to work, grant the bot **Moderate Members**, **Kick Members**, 
 If Discord denies an action, the bot posts the missing permission or role problem
 instead of failing silently.
 
+## Giveaways
+
+Giveaways use a persistent SQLite database and a restart-safe scheduler. Administrators
+with **Manage Server** configure them through Discord modals, role/channel selectors,
+and preview panels; members enter from the published message.
+
+| Command | What it does |
+| ------- | ------------ |
+| `/giveaway create` | Open the interactive creator and preview |
+| `/giveaway list` | List active giveaways |
+| `/giveaway manage` | Open the admin dashboard, history, participants, and statistics |
+| `/giveaway info <id>` | Show configuration, status, entries, and winner history |
+| `/giveaway end <id>` | Confirm and immediately draw winners |
+| `/giveaway reroll <id>` | Confirm and draw replacement winners |
+| `/giveaway cancel <id>` | Confirm and cancel without winners |
+
+The creator supports role, account-age, membership-age, invite, and channel-access
+requirements; role-based bonus entries; repeated-entry limits; bot/host controls;
+images, thumbnails, colors; and announcement/reroll settings. The bot needs **View
+Channel**, **Send Messages**, **Embed Links**, and **Read Message History** in giveaway
+channels. Invite requirements additionally need **Manage Server** so invite counts can
+be verified.
+
 ## Tickets
 
 One admin command, a click-to-open panel, and approval-based closing with an AI

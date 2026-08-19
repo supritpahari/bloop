@@ -114,6 +114,8 @@ async def shutdown(signal_name: str):
         await bot.xp_db.close()
     if hasattr(bot, "tickets_db") and bot.tickets_db:
         await bot.tickets_db.close()
+    if hasattr(bot, "giveaways_db") and bot.giveaways_db:
+        await bot.giveaways_db.close()
     await bot.close()
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
@@ -132,6 +134,9 @@ async def main():
     from economy.tickets_db import TicketsDB
     bot.tickets_db = TicketsDB()
     await bot.tickets_db.setup()
+    from economy.giveaways_db import GiveawaysDB
+    bot.giveaways_db = GiveawaysDB()
+    await bot.giveaways_db.setup()
     disk = await db.disk_usage()
     info = await db.info()
     print(f"[db] {info['path']}")
@@ -167,6 +172,7 @@ async def main():
         await bot.load_extension("cogs.welcome_leave")
         await bot.load_extension("cogs.embed")
         await bot.load_extension("cogs.tickets")
+        await bot.load_extension("cogs.giveaway")
         try:
             await bot.start(TOKEN)
         except asyncio.CancelledError:
@@ -176,6 +182,8 @@ async def main():
         finally:
             if bot.db:
                 await bot.db.close()
+            if getattr(bot, "giveaways_db", None):
+                await bot.giveaways_db.close()
 
 
 if __name__ == "__main__":
