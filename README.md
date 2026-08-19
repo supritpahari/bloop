@@ -34,6 +34,7 @@ python bot.py
 | `b.echo ...`   | `/echo`     | Repeats your message            | Anyone              |
 | `b.avatar [@user]` | `/avatar`  | Shows a big profile picture     | Anyone              |
 | `b.userinfo [@user]` | `/userinfo` | Shows user details (ID, joined, roles, ...) | Anyone    |
+| `b.neko`       | `/neko`     | Shows a random neko image from Nekos API | Anyone |
 | `b.embed`      | `/embed`    | Builds and posts a custom embed (`b.embed` asks for `Title | Text | Footer | Color | Channel` in chat, `/embed` opens a form) | Manage Messages |
 | `b.kick @user [reason]` | `/kick` | Kicks a member              | Kick Members        |
 | `b.ban @user [reason]` | `/ban`   | Bans a member               | Ban Members         |
@@ -63,6 +64,29 @@ automatic action to work, grant the bot **Moderate Members**, **Kick Members**, 
 **Ban Members**, then place its highest role above the members it should moderate.
 If Discord denies an action, the bot posts the missing permission or role problem
 instead of failing silently.
+
+## Giveaways
+
+Giveaways use a persistent SQLite database and a restart-safe scheduler. Administrators
+with **Manage Server** configure them through Discord modals, role/channel selectors,
+and preview panels; members enter from the published message.
+
+| Command | What it does |
+| ------- | ------------ |
+| `/giveaway create` | Open the interactive creator and preview |
+| `/giveaway list` | List active giveaways |
+| `/giveaway manage` | Open the admin dashboard, history, participants, and statistics |
+| `/giveaway info <id>` | Show configuration, status, entries, and winner history |
+| `/giveaway end <id>` | Confirm and immediately draw winners |
+| `/giveaway reroll <id>` | Confirm and draw replacement winners |
+| `/giveaway cancel <id>` | Confirm and cancel without winners |
+
+The creator supports role, account-age, membership-age, invite, and channel-access
+requirements; role-based bonus entries; repeated-entry limits; bot/host controls;
+images, thumbnails, colors; and announcement/reroll settings. The bot needs **View
+Channel**, **Send Messages**, **Embed Links**, and **Read Message History** in giveaway
+channels. Invite requirements additionally need **Manage Server** so invite counts can
+be verified.
 
 ## Tickets
 
