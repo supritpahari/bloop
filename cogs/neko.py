@@ -42,10 +42,15 @@ class Neko(commands.Cog):
         """
         try:
             async with self._request_lock:
-                return await asyncio.to_thread(
+                result = await asyncio.to_thread(
                     self.nekos.get_random_image,
                     categories=[NEKO_CATEGORY],
                 )
+                logger.info(f"Nekos API raw result: {result!r}")
+                logger.info(f"Nekos API result type: {type(result)}")
+                if result:
+                    logger.info(f"Nekos API result attrs: url={getattr(result, 'url', 'MISSING')}, id={getattr(result, 'id', 'MISSING')}")
+                return result
         except Exception:
             logger.exception("Could not fetch an image from Nekos API")
             return None
@@ -101,6 +106,10 @@ class Neko(commands.Cog):
         else:
             async with target.typing():
                 image = await self._fetch_neko()
+
+        logger.info(f"_send_neko got image: {image!r}")
+        if image:
+            logger.info(f"image.url = {getattr(image, 'url', 'MISSING')}")
 
         if image is None or not getattr(image, "url", None):
             message = "😿 Couldn't fetch a neko right now. Please try again later!"

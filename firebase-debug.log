@@ -4,3 +4,9 @@
 [debug] [2026-08-11T16:38:26.716Z] > authorizing via signed-in user (obliqllc@gmail.com)
 [debug] [2026-08-11T16:38:26.867Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
 [debug] [2026-08-11T16:38:26.869Z] > authorizing via signed-in user (obliqllc@gmail.com)
+[debug] [2026-08-11T17:19:49.686Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-11T17:19:49.690Z] > authorizing via signed-in user (obliqllc@gmail.com)
+[debug] [2026-08-11T17:19:49.720Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-11T17:19:49.721Z] > authorizing via signed-in user (obliqllc@gmail.com)
+[debug] [2026-08-11T17:19:49.749Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-11T17:19:49.750Z] > authorizing via signed-in user (obliqllc@gmail.com)
