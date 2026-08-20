@@ -1,12 +1,13 @@
-"""Neko command backed by Nekos API's official Python client."""
+"""Neko command backed by nekos.best API (anime-api library is broken)."""
 
 import asyncio
 import logging
 import time
+from types import SimpleNamespace
 from typing import Any
 
 import discord
-from anime_api.apis import NekosAPI
+import httpx
 from discord import app_commands
 from discord.ext import commands
 
@@ -17,11 +18,10 @@ COOLDOWN_SECONDS = 3
 
 
 class Neko(commands.Cog):
-    """Fetch random neko images from Nekos API."""
+    """Fetch random neko images from nekos.best API."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.nekos = NekosAPI()
         self._request_lock = asyncio.Lock()
         self._cooldowns: dict[int, float] = {}
 
@@ -35,22 +35,43 @@ class Neko(commands.Cog):
         return 0
 
     async def _fetch_neko(self) -> Any | None:
-        """Fetch without blocking Discord's event loop.
-
-        anime-api uses the synchronous requests library and performs its own
-        rate limiting, so calls are moved to a worker thread and serialized.
-        """
+        """Fetch without blocking Discord's event loop."""
         try:
             async with self._request_lock:
-                result = await asyncio.to_thread(
-                    self.nekos.get_random_image,
-                    categories=[NEKO_CATEGORY],
-                )
-                logger.info(f"Nekos API raw result: {result!r}")
-                logger.info(f"Nekos API result type: {type(result)}")
-                if result:
-                    logger.info(f"Nekos API result attrs: url={getattr(result, 'url', 'MISSING')}, id={getattr(result, 'id', 'MISSING')}")
-                return result
+                # Call nekos.best API directly
+                url = f"https://nekos.best/api/v2/{NEKO_CATEGORY}"
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.get(url)
+                    logger.info(f"Nekos API HTTP status: {resp.status_code}")
+                    logger.info(f"Nekos API raw response: {resp.text[:500]}")
+
+                    if resp.status_code != 200:
+                        logger.error(f"Nekos API returned {resp.status_code}")
+                        return None
+
+                    data = resp.json()
+                    logger.info(f"Nekos API parsed JSON: {data}")
+
+                    # nekos.best returns {"results": [{"url": ..., "artist_name": ..., "artist_href": ..., "source_url": ..., "anime_name": ...}]}
+                    results = data.get("results")
+                    if not results or not isinstance(results, list) or not results[0]:
+                        logger.error(f"Unexpected API response structure: {data}")
+                        return None
+
+                    # Return a simple object with the needed attributes
+                    first = results[0]
+                    return SimpleNamespace(
+                        url=first.get("url"),
+                        artist=SimpleNamespace(
+                            name=first.get("artist_name"),
+                            url=first.get("artist_href"),
+                        ) if first.get("artist_name") else None,
+                        source=SimpleNamespace(
+                            name=first.get("anime_name") or "nekos.best",
+                            url=first.get("source_url"),
+                        ) if first.get("source_url") or first.get("anime_name") else None,
+                        id=first.get("anime_name") or "unknown",
+                    )
         except Exception:
             logger.exception("Could not fetch an image from Nekos API")
             return None
@@ -83,7 +104,7 @@ class Neko(commands.Cog):
             source_name = getattr(source, "name", None) or "Original source"
             embed.add_field(name="Source", value=f"[{source_name}]({source.url})")
 
-        footer = "Powered by Nekos API"
+        footer = "Powered by nekos.best"
         if image_id:
             footer += f" • ID: {image_id}"
         embed.set_footer(text=footer)
@@ -125,7 +146,7 @@ class Neko(commands.Cog):
         else:
             await target.send(embed=embed)
 
-    @commands.command(name="neko", help="Get a random neko image from Nekos API")
+    @commands.command(name="neko", help="Get a random neko image from nekos.best")
     async def neko_prefix(self, ctx: commands.Context):
         """Prefix command: b.neko."""
         await self._send_neko(ctx)
