@@ -41,7 +41,7 @@ class Neko(commands.Cog):
                 # Call nekos.best API directly
                 url = f"https://nekos.best/api/v2/{NEKO_CATEGORY}"
                 headers = {
-                    "User-Agent": "BloopBot/1.0 (https://github.com/your-repo; contact@email.com)"
+                    "User-Agent": "Mozilla/5.0 (compatible; BloopBot/1.0; +https://github.com/your-repo)"
                 }
                 async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
                     resp = await client.get(url)
