@@ -1,4 +1,4 @@
-"""Neko command backed by nekos.best API (anime-api library is broken)."""
+"""Neko command backed by nekos.life API."""
 
 import asyncio
 import logging
@@ -13,12 +13,12 @@ from discord.ext import commands
 
 logger = logging.getLogger(__name__)
 
-NEKO_CATEGORY = "kemonomimi"
+NEKO_CATEGORY = "neko"
 COOLDOWN_SECONDS = 3
 
 
 class Neko(commands.Cog):
-    """Fetch random neko images from nekos.best API."""
+    """Fetch random neko images from nekos.life API."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -38,12 +38,9 @@ class Neko(commands.Cog):
         """Fetch without blocking Discord's event loop."""
         try:
             async with self._request_lock:
-                # Call nekos.best API directly
-                url = f"https://nekos.best/api/v2/{NEKO_CATEGORY}"
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (compatible; BloopBot/1.0; +https://github.com/your-repo)"
-                }
-                async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
+                # Call nekos.life API directly - simpler and no strict User-Agent requirements
+                url = f"https://nekos.life/api/v2/img/{NEKO_CATEGORY}"
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.get(url)
                     logger.info(f"Nekos API HTTP status: {resp.status_code}")
                     logger.info(f"Nekos API raw response: {resp.text[:500]}")
@@ -55,25 +52,21 @@ class Neko(commands.Cog):
                     data = resp.json()
                     logger.info(f"Nekos API parsed JSON: {data}")
 
-                    # nekos.best returns {"results": [{"url": ..., "artist_name": ..., "artist_href": ..., "source_url": ..., "anime_name": ...}]}
-                    results = data.get("results")
-                    if not results or not isinstance(results, list) or not results[0]:
+                    # nekos.life returns {"url": "https://..."}
+                    image_url = data.get("url")
+                    if not image_url:
                         logger.error(f"Unexpected API response structure: {data}")
                         return None
 
                     # Return a simple object with the needed attributes
-                    first = results[0]
                     return SimpleNamespace(
-                        url=first.get("url"),
-                        artist=SimpleNamespace(
-                            name=first.get("artist_name"),
-                            url=first.get("artist_href"),
-                        ) if first.get("artist_name") else None,
+                        url=image_url,
+                        artist=None,
                         source=SimpleNamespace(
-                            name=first.get("anime_name") or "nekos.best",
-                            url=first.get("source_url"),
-                        ) if first.get("source_url") or first.get("anime_name") else None,
-                        id=first.get("anime_name") or "unknown",
+                            name="nekos.life",
+                            url="https://nekos.life",
+                        ),
+                        id="unknown",
                     )
         except Exception:
             logger.exception("Could not fetch an image from Nekos API")
@@ -107,7 +100,7 @@ class Neko(commands.Cog):
             source_name = getattr(source, "name", None) or "Original source"
             embed.add_field(name="Source", value=f"[{source_name}]({source.url})")
 
-        footer = "Powered by nekos.best"
+        footer = "Powered by nekos.life"
         if image_id:
             footer += f" • ID: {image_id}"
         embed.set_footer(text=footer)
@@ -149,7 +142,7 @@ class Neko(commands.Cog):
         else:
             await target.send(embed=embed)
 
-    @commands.command(name="neko", help="Get a random neko image from nekos.best")
+    @commands.command(name="neko", help="Get a random neko image from nekos.life")
     async def neko_prefix(self, ctx: commands.Context):
         """Prefix command: b.neko."""
         await self._send_neko(ctx)
