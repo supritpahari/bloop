@@ -40,7 +40,10 @@ class Neko(commands.Cog):
             async with self._request_lock:
                 # Call nekos.best API directly
                 url = f"https://nekos.best/api/v2/{NEKO_CATEGORY}"
-                async with httpx.AsyncClient(timeout=15.0) as client:
+                headers = {
+                    "User-Agent": "BloopBot/1.0 (https://github.com/your-repo; contact@email.com)"
+                }
+                async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
                     resp = await client.get(url)
                     logger.info(f"Nekos API HTTP status: {resp.status_code}")
                     logger.info(f"Nekos API raw response: {resp.text[:500]}")
